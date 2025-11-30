@@ -53,7 +53,3 @@ Get-NetTCPConnection -LocalPort 8080 | ForEach-Object { Stop-Process -Id $_.Owni
 - opponent_tracker.py: Opponent modeling
 - test_server.py: Local test server
 - requirements.txt: Dependencies
-
----
-
-Good luck at the tables!
