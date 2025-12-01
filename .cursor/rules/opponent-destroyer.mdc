@@ -334,35 +334,117 @@ def select_counter_strategy(self, opponent_type, game_state):
 
 ## Detection Timeline
 
-### Early Game (Hands 1-20): Rapid Classification
+### 🚨 TOURNAMENT STRUCTURE
+**Starting Stack:** $1,000
+**Minimum Bet:** $10
+**Win Condition:** Last player with >$10
+**Expected Duration:** 80-150+ hands
+**OPTIMAL DETECTION:** 10-20 hands (faster than 50, but accurate)
+
+### Balanced Fast Classification (Hands 1-20)
+
 ```python
-def rapid_classification(self, opponent_data):
-    """Classify opponent type in first 20 hands."""
+def balanced_classification(self, opponent_data):
+    """
+    Classify opponent type in 10-20 hands.
 
-    # Immediate tells
-    if opponent_data.hands_played < 5:
-        # Look for obvious patterns
-        if opponent_data.vpip > 0.8:
-            return "likely_random_or_maniac"
-        if opponent_data.vpip < 0.1:
-            return "likely_ultra_tight_or_rule_based"
+    TOURNAMENT REALITY:
+    - Tournament lasts 80-150+ hands (last player >$10 wins)
+    - We have time to be accurate
+    - But 50 hands wastes profit opportunities
+    - Sweet spot: 10-20 hands for 85-90% confidence
+    """
 
-    # 10-20 hands: More data
-    if 10 <= opponent_data.hands_played < 20:
-        # Check response times
-        if avg(opponent_data.response_times) > 2.0:
-            return "likely_mcts"
-        if std(opponent_data.response_times) < 0.05:
-            return "likely_bot_not_human"
+    hands = opponent_data.hands_played
 
-        # Check bet sizing
-        unique_bet_sizes = len(set(opponent_data.bet_sizes))
-        if unique_bet_sizes < 5:
-            return "likely_rule_based"
-        if unique_bet_sizes > 20:
-            return "likely_rl_or_human"
+    # HANDS 1-5: Early signals (gather data aggressively)
+    if hands >= 5:
+        # Obvious patterns emerge quickly
+        if opponent_data.first_hand_obvious_mistake:
+            return "RANDOM_BEGINNER", 0.85
 
-    return "insufficient_data"
+        # Response time patterns
+        if avg(opponent_data.response_times) > 2.5:
+            return "LIKELY_MCTS", 0.70  # Preliminary
+
+        # Extreme VPIP (early indicator)
+        if opponent_data.vpip > 0.80 or opponent_data.vpip < 0.08:
+            if opponent_data.vpip > 0.80:
+                return "LIKELY_RANDOM", 0.70
+            else:
+                return "LIKELY_ULTRA_TIGHT", 0.70
+
+    # HANDS 6-12: Initial classification (75-80% confidence)
+    if hands >= 10:
+        vpip = opponent_data.vpip
+        pfr = opponent_data.pfr
+
+        # GTO signature (balanced stats)
+        if 0.18 <= vpip <= 0.28 and 0.12 <= pfr <= 0.22:
+            af = opponent_data.af
+            if 1.5 <= af <= 2.5:
+                return "CFR_GTO", 0.78
+
+        # Rule-based signature (high consistency)
+        if opponent_data.consistency_score > 0.85:
+            unique_bet_sizes = len(set(opponent_data.bet_sizes))
+            if unique_bet_sizes < 6:
+                return "RULE_BASED", 0.85
+
+        # Random signature (low consistency, bad stats)
+        if opponent_data.consistency_score < 0.35:
+            return "RANDOM_BEGINNER", 0.80
+
+        # MCTS signature (slow + pot-sized bets)
+        if avg(opponent_data.response_times) > 1.5:
+            if most_common_bet_ratio in [0.5, 0.75, 1.0, 2.0]:
+                return "MCTS", 0.75
+
+        # RL signature (fast + varied + some adaptation)
+        if avg(opponent_data.response_times) < 0.2:
+            unique_bet_sizes = len(set(opponent_data.bet_sizes))
+            if unique_bet_sizes > 12:
+                return "RL_BOT", 0.72
+
+    # HANDS 13-20: Refined classification (85-90% confidence)
+    if hands >= 15:
+        # Full statistical analysis with strong confidence
+        return self.standard_classification()  # 85-95% confidence
+
+    return "UNKNOWN", 0.0
+
+
+def get_confidence_threshold(self, our_chip_stack):
+    """
+    Adjust detection speed based on chip stack urgency.
+
+    With 80-150+ hand tournaments, we can afford accuracy.
+    But when short-stacked, we need to act faster.
+    """
+    if our_chip_stack > 700:
+        # Comfortable - use full detection time
+        return {
+            "min_hands": 15,
+            "confidence": 0.85
+        }
+    elif our_chip_stack > 400:
+        # Moderate - speed up slightly
+        return {
+            "min_hands": 10,
+            "confidence": 0.80
+        }
+    elif our_chip_stack > 200:
+        # Getting short - act faster
+        return {
+            "min_hands": 8,
+            "confidence": 0.75
+        }
+    else:  # <= 200
+        # CRITICAL - need chips NOW
+        return {
+            "min_hands": 5,
+            "confidence": 0.70  # Accept lower confidence
+        }
 ```
 
 ### Mid Game (Hands 20-100): Refinement
