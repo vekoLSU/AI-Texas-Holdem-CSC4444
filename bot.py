@@ -4,31 +4,34 @@ import websockets
 import sys
 from typing import Optional, Dict, List
 from hand_evaluator import HandEvaluator
-from decision_engine import DecisionEngine
 from opponent_tracker import OpponentTracker
+from meta_controller import MetaController
 
 class PokerBot:
-    # Poker bot main class
-    
+    # Poker bot main class with ensemble strategy system
+
     def __init__(self, api_key: str, table: str, player: str, server_url: str = "ws://localhost:8080"):
         self.api_key = api_key
         self.table = table
         self.player = player
         self.server_url = server_url
-        
+
         # Game state
         self.game_state: Optional[Dict] = None
         self.hand_cards: List[str] = []
         self.community_cards: List[str] = []
-        
+
         # Strategy components
         self.hand_evaluator = HandEvaluator()
-        self.decision_engine = DecisionEngine()
         self.opponent_tracker = OpponentTracker()
-        
+
+        # ENSEMBLE SYSTEM: MetaController manages three specialist agents
+        self.meta_controller = MetaController(self.opponent_tracker)
+
         # Stats tracking
         self.hands_played = 0
         self.hands_won = 0
+        self.current_agent = None  # Track which agent made the decision
         
     def get_ws_url(self) -> str:
         # Build WebSocket URL
@@ -184,8 +187,8 @@ class PokerBot:
             opponent_profiles = self.opponent_tracker.get_opponent_profiles(clean_players)
             print(f"[DEBUG] make_decision: opponent_profiles={opponent_profiles}")
 
-            # Use decision engine to determine optimal action
-            decision = self.decision_engine.decide(
+            # Use meta-controller to select optimal agent and get decision
+            decision = self.meta_controller.decide(
                 hand_cards=our_player.get("cards", self.hand_cards),
                 community_cards=self.community_cards,
                 hand_strength=hand_strength,
@@ -196,9 +199,15 @@ class PokerBot:
                 position=position,
                 num_players=num_active_players,
                 opponent_profiles=opponent_profiles,
-                current_bet=current_bet
+                current_bet=current_bet,
+                our_player_id=self.player
             )
             print(f"[DEBUG] make_decision: decision={decision}")
+
+            # Track which agent was used
+            if "meta" in decision:
+                self.current_agent = decision["meta"]["agent"]
+                print(f"[ENSEMBLE] Agent: {self.current_agent} | Opponent: {decision['meta']['opponent_type']} | Confidence: {decision['meta']['confidence']:.2f}")
 
             # Format action for server
             action_type = decision["action"]
@@ -253,28 +262,46 @@ class PokerBot:
         winner = msg.get('winner', 'Unknown')
         pot = msg.get('pot', 0)
         winning_hand = msg.get('winning_hand', '')
-        
+
+        # Record result for agent performance tracking
+        won = (winner == self.player)
+        if self.current_agent:
+            self.meta_controller.record_hand_result(self.current_agent, won)
+
         print(f"\n{'='*60}")
         print(f"🎰 SHOWDOWN RESULTS")
         print(f"{'='*60}")
-        
-        if winner == self.player:
+
+        if won:
             self.hands_won += 1
             print(f"🏆 YOU WIN ${pot}!")
             print(f"✨ Winning hand: {winning_hand}")
             print(f"🎉 Congratulations!")
+            if self.current_agent:
+                print(f"🤖 Winning Agent: {self.current_agent}")
         else:
             print(f"😞 {winner} wins ${pot}")
             print(f"💔 Better luck next time!")
-        
+            if self.current_agent:
+                print(f"🤖 Agent Used: {self.current_agent}")
+
         print(f"\n📊 Session Stats:")
         print(f"   Hands Played: {self.hands_played + 1}")
         print(f"   Hands Won: {self.hands_won}")
         if self.hands_played > 0:
             win_rate = (self.hands_won / (self.hands_played + 1)) * 100
             print(f"   Win Rate: {win_rate:.1f}%")
+
+        # Show agent statistics
+        agent_stats = self.meta_controller.get_agent_stats()
+        print(f"\n🤖 Ensemble Stats:")
+        for agent, usage in agent_stats["usage"].items():
+            if usage > 0:
+                wr = agent_stats["win_rates"][agent] * 100 if agent in agent_stats["win_rates"] else 0
+                print(f"   {agent.upper()}: {usage} hands, {wr:.1f}% win rate")
+
         print(f"{'='*60}\n")
-        
+
         self.hands_played += 1
 
 
