@@ -1,0 +1,733 @@
+---
+globs: ["*test*.py", "test_server.py"]
+alwaysApply: false
+---
+
+# Testing Standards & Practices
+
+## Testing Philosophy
+
+A trainable poker bot requires comprehensive testing to ensure:
+1. **Game mechanics work correctly** (hand evaluation, pot calculation, etc.)
+2. **Strategies are testable** (can compare different approaches)
+3. **Opponent modeling is accurate** (statistics calculated correctly)
+4. **ML training produces improvements** (new models outperform old)
+5. **Edge cases are handled** (invalid actions, disconnections, etc.)
+
+---
+
+## Testing Pyramid
+
+### Unit Tests (Base Layer)
+Test individual functions and methods in isolation:
+- Hand evaluator logic
+- Pot odds calculations
+- Opponent statistics tracking
+- Action validation
+- Card parsing and formatting
+
+### Integration Tests (Middle Layer)
+Test module interactions:
+- Bot + Hand Evaluator
+- Bot + Decision Engine
+- Bot + Opponent Tracker
+- Full message flow (WebSocket simulation)
+
+### System Tests (Top Layer)
+Test complete system against real scenarios:
+- Full game simulations (using test_server.py)
+- Multi-hand performance testing
+- Strategy evaluation against different opponents
+- Stress testing (many hands, edge cases)
+
+---
+
+## Unit Testing Standards
+
+### Hand Evaluator Tests
+
+```python
+import pytest
+from hand_evaluator import HandEvaluator
+
+class TestHandEvaluator:
+    def setup_method(self):
+        self.evaluator = HandEvaluator()
+
+    def test_royal_flush_detection(self):
+        """Test that royal flush is correctly identified."""
+        cards = ["As", "Ks", "Qs", "Js", "Ts"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "royal_flush"
+        assert result["rank"] == 10  # Highest rank
+
+    def test_straight_flush_detection(self):
+        """Test straight flush identification."""
+        cards = ["9h", "8h", "7h", "6h", "5h"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "straight_flush"
+        assert result["rank"] == 9
+
+    def test_four_of_kind(self):
+        """Test four of a kind detection."""
+        cards = ["Kd", "Kh", "Kc", "Ks", "7d"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "four_of_kind"
+        assert result["primary_rank"] == "K"
+
+    def test_full_house(self):
+        """Test full house detection."""
+        cards = ["Qd", "Qh", "Qc", "8s", "8d"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "full_house"
+        assert result["trips_rank"] == "Q"
+        assert result["pair_rank"] == "8"
+
+    def test_flush(self):
+        """Test flush detection."""
+        cards = ["Ad", "Jd", "9d", "6d", "2d"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "flush"
+
+    def test_straight(self):
+        """Test straight detection."""
+        cards = ["Td", "9h", "8s", "7c", "6d"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "straight"
+
+    def test_ace_low_straight(self):
+        """Test A-2-3-4-5 straight (wheel)."""
+        cards = ["5d", "4h", "3s", "2c", "Ad"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "straight"
+        assert result["high_card"] == "5"  # Not ace in wheel
+
+    def test_three_of_kind(self):
+        """Test trips detection."""
+        cards = ["7h", "7d", "7c", "Ks", "4h"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "three_of_kind"
+
+    def test_two_pair(self):
+        """Test two pair detection."""
+        cards = ["Jh", "Jd", "5c", "5s", "Ah"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "two_pair"
+
+    def test_one_pair(self):
+        """Test pair detection."""
+        cards = ["9d", "9h", "Kc", "8s", "3d"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "pair"
+
+    def test_high_card(self):
+        """Test high card (no made hand)."""
+        cards = ["As", "Jh", "9d", "6c", "3s"]
+        result = self.evaluator.classify_hand(cards)
+
+        assert result["hand_type"] == "high_card"
+
+    def test_best_5_from_7(self):
+        """Test finding best 5-card hand from 7 cards."""
+        hole_cards = ["As", "Kh"]
+        board = ["Qd", "Jc", "Tc", "3s", "2h"]
+        result = self.evaluator.evaluate_postflop(hole_cards, board)
+
+        assert result["hand_type"] == "straight"
+        assert result["strength"] > 0.8  # Strong hand
+
+    @pytest.mark.parametrize("cards,expected_outs", [
+        (["Ah", "Kh", "Qh", "5h"], 9),  # Flush draw
+        (["9s", "8h", "7d", "6c"], 8),  # Open-ended straight draw
+        (["Td", "9s", "7h", "6c"], 4),  # Gutshot straight draw
+    ])
+    def test_draw_potential(self, cards, expected_outs):
+        """Test out calculation for various draws."""
+        board_cards = cards
+        result = self.evaluator.calculate_draw_potential([], board_cards)
+
+        assert result["num_outs"] == expected_outs
+```
+
+### Opponent Tracker Tests
+
+```python
+from opponent_tracker import OpponentTracker
+
+class TestOpponentTracker:
+    def setup_method(self):
+        self.tracker = OpponentTracker()
+
+    def test_initial_stats(self):
+        """New player should have zero stats."""
+        stats = self.tracker.player_stats["player1"]
+
+        assert stats["hands_played"] == 0
+        assert stats["total_bets"] == 0
+
+    def test_action_recording(self):
+        """Test that actions are recorded correctly."""
+        self.tracker.record_action("player1", "raise", 100, "PREFLOP")
+
+        stats = self.tracker.player_stats["player1"]
+        assert stats["total_raises"] == 1
+        assert stats["preflop_raises"] == 1
+        assert stats["aggressive_actions"] == 1
+
+    def test_vpip_calculation(self):
+        """Test VPIP calculation."""
+        # Player voluntarily enters 3 out of 10 hands
+        for i in range(10):
+            self.tracker.record_action(f"hand_{i}", "fold", 0, "PREFLOP")
+
+        for i in range(3):
+            self.tracker.record_action(f"hand_{i}", "call", 10, "PREFLOP")
+
+        vpip = self.tracker.calculate_vpip("player1")
+        assert vpip == pytest.approx(0.30, abs=0.01)  # 30%
+
+    def test_pfr_calculation(self):
+        """Test PFR calculation."""
+        # Player raises preflop 2 out of 10 hands
+        for i in range(10):
+            self.tracker.observe_state({"hand_num": i})
+
+        self.tracker.record_action("player1", "raise", 20, "PREFLOP")
+        self.tracker.record_action("player1", "raise", 20, "PREFLOP")
+
+        pfr = self.tracker.calculate_pfr("player1")
+        assert pfr == pytest.approx(0.20, abs=0.01)  # 20%
+
+    def test_aggression_factor(self):
+        """Test aggression factor calculation."""
+        # 6 aggressive actions (raise/bet), 3 passive (call)
+        for _ in range(6):
+            self.tracker.record_action("player1", "raise", 50, "FLOP")
+
+        for _ in range(3):
+            self.tracker.record_action("player1", "call", 50, "FLOP")
+
+        af = self.tracker.calculate_aggression_factor("player1")
+        assert af == pytest.approx(2.0, abs=0.1)  # 6/3 = 2.0
+
+    def test_player_classification_tag(self):
+        """Test TAG (Tight-Aggressive) classification."""
+        # Simulate TAG stats: low VPIP, high aggression
+        self.tracker.player_stats["player1"]["hands_played"] = 100
+        self.tracker.player_stats["player1"]["preflop_calls"] = 10
+        self.tracker.player_stats["player1"]["preflop_raises"] = 8
+        self.tracker.player_stats["player1"]["aggressive_actions"] = 50
+        self.tracker.player_stats["player1"]["passive_actions"] = 20
+
+        player_type = self.tracker.classify_player("player1")
+        assert player_type == "TAG"
+
+    def test_player_classification_fish(self):
+        """Test fish (Loose-Passive) classification."""
+        # Simulate fish stats: high VPIP, low aggression
+        self.tracker.player_stats["player1"]["hands_played"] = 100
+        self.tracker.player_stats["player1"]["preflop_calls"] = 45
+        self.tracker.player_stats["player1"]["preflop_raises"] = 5
+        self.tracker.player_stats["player1"]["aggressive_actions"] = 10
+        self.tracker.player_stats["player1"]["passive_actions"] = 50
+
+        player_type = self.tracker.classify_player("player1")
+        assert player_type == "fish"
+```
+
+### Decision Engine Tests
+
+```python
+from decision_engine import DecisionEngine, StrategyInterface
+
+class TestDecisionEngine:
+    def setup_method(self):
+        # Use configurable strategy for testing
+        self.strategy = MockStrategy()
+        self.engine = DecisionEngine(strategy=self.strategy)
+
+    def test_action_validation(self):
+        """Ensure only valid actions are returned."""
+        game_state = {"to_call": 0, "our_stack": 1000}
+        decision = self.engine.decide(game_state, ...)
+
+        assert decision["action"] in ["fold", "check", "call", "raise", "all_in"]
+
+    def test_bet_sizing_within_stack(self):
+        """Ensure bet size doesn't exceed stack."""
+        game_state = {"to_call": 50, "our_stack": 200}
+        decision = self.engine.decide(game_state, ...)
+
+        if decision["action"] == "raise":
+            assert decision["amount"] <= 200
+
+    def test_strategy_interface_compliance(self):
+        """Ensure strategy implements required interface."""
+        assert hasattr(self.strategy, 'decide')
+        assert hasattr(self.strategy, 'update')
+        assert hasattr(self.strategy, 'save')
+        assert hasattr(self.strategy, 'load')
+
+
+class MockStrategy(StrategyInterface):
+    """Mock strategy for testing."""
+
+    def decide(self, game_state, hand_strength, opponent_profiles, phase, position, pot_odds):
+        # Simple mock logic
+        if hand_strength["strength"] > 0.8:
+            return {"action": "raise", "amount": 100, "confidence": 0.9}
+        elif hand_strength["strength"] > 0.5:
+            return {"action": "call", "amount": 0, "confidence": 0.7}
+        else:
+            return {"action": "fold", "amount": 0, "confidence": 0.6}
+
+    def update(self, outcome):
+        pass
+
+    def save(self, filepath):
+        pass
+
+    def load(self, filepath):
+        pass
+```
+
+---
+
+## Integration Testing
+
+### Bot + Modules Integration
+
+```python
+class TestBotIntegration:
+    def setup_method(self):
+        from hand_evaluator import HandEvaluator
+        from decision_engine import DecisionEngine
+        from opponent_tracker import OpponentTracker
+        from bot import PokerBot
+
+        hand_eval = HandEvaluator()
+        decision_engine = DecisionEngine(strategy=MockStrategy())
+        opponent_tracker = OpponentTracker()
+
+        self.bot = PokerBot(
+            hand_evaluator=hand_eval,
+            decision_engine=decision_engine,
+            opponent_tracker=opponent_tracker
+        )
+
+    def test_handle_state_update(self):
+        """Test bot processes state updates correctly."""
+        state_message = {
+            "type": "state",
+            "game": {
+                "phase": "FLOP",
+                "pot": 500,
+                "players": [
+                    {"id": "bot1", "chips": 2000, "bet": 0},
+                    {"id": "player2", "chips": 1500, "bet": 100}
+                ],
+                "communityCards": [
+                    {"rank": "A", "suit": "s"},
+                    {"rank": "K", "suit": "h"},
+                    {"rank": "Q", "suit": "d"}
+                ]
+            }
+        }
+
+        # Bot should process state without errors
+        # (actual WebSocket send would be mocked)
+        try:
+            # Process state (without actual WebSocket)
+            self.bot.game_state = state_message["game"]
+            assert True
+        except Exception as e:
+            pytest.fail(f"State processing failed: {e}")
+
+    def test_decision_making_flow(self):
+        """Test complete decision-making flow."""
+        self.bot.hand_cards = ["As", "Kh"]
+        self.bot.game_state = {
+            "phase": "FLOP",
+            "pot": 300,
+            "communityCards": ["Qd", "Jc", "Tc"]
+        }
+
+        # Make decision
+        decision = self.bot.make_decision(
+            players=[{"id": "bot1", "chips": 2000, "bet": 0}],
+            current_bet=0,
+            pot=300
+        )
+
+        # Should return valid decision
+        assert "action" in decision
+        assert "amount" in decision
+```
+
+---
+
+## System Testing with test_server.py
+
+### Simulation Testing
+
+```python
+class TestFullGameSimulation:
+    def test_1000_hands_simulation(self):
+        """Run bot through 1000 hands and verify it completes."""
+        # Start test_server in subprocess
+        # Connect bot
+        # Run 1000 hands
+        # Verify no crashes, valid actions throughout
+
+        # This would typically be a separate test script
+        pass
+
+    def test_various_opponent_types(self):
+        """Test bot against different simulated opponents."""
+        opponent_types = ["tight", "loose", "aggressive", "passive"]
+
+        for opp_type in opponent_types:
+            # Simulate 100 hands against this opponent type
+            # Verify bot adapts appropriately
+            pass
+
+    def test_edge_cases(self):
+        """Test edge cases: all-in, side pots, etc."""
+        # Test specific scenarios
+        pass
+```
+
+### Deterministic Testing
+
+```python
+class TestDeterministicScenarios:
+    """Test specific scenarios with known cards."""
+
+    def test_nut_flush_scenario(self):
+        """
+        Scenario: We have nut flush, opponent has second-best flush.
+        Expected: Bot should value bet aggressively.
+        """
+        bot_cards = ["Ah", "Kh"]
+        board = ["Qh", "Jh", "5h", "3d", "2c"]
+        opponent_cards = ["Th", "9h"]  # Second nut flush
+
+        # Simulate this scenario
+        # Verify bot makes profitable decisions
+        pass
+
+    def test_bluff_opportunity(self):
+        """
+        Scenario: Board is scary, we have nothing, opponent likely missed.
+        Expected: Bot should consider bluffing.
+        """
+        bot_cards = ["7d", "6d"]
+        board = ["Ah", "Ks", "Qs", "2c", "3h"]
+
+        # If opponent shows weakness, bot should potentially bluff
+        pass
+
+    def test_trap_scenario(self):
+        """
+        Scenario: We have full house, board shows pair.
+        Expected: Bot should slow-play or trap.
+        """
+        bot_cards = ["Kh", "Kd"]
+        board = ["Ks", "Kc", "8h", "8d", "3s"]  # Four of a kind
+
+        # Bot should maximize value (not fold to aggression)
+        pass
+```
+
+---
+
+## Strategy Evaluation Testing
+
+### Performance Benchmarking
+
+```python
+class TestStrategyPerformance:
+    """Evaluate different strategies against each other."""
+
+    def test_strategy_vs_random(self):
+        """Strategy should beat random play decisively."""
+        strategy = LearnedStrategy("models/latest.pkl")
+        random_strategy = RandomStrategy()
+
+        win_rate = self._play_match(strategy, random_strategy, num_hands=10000)
+
+        assert win_rate > 0.70  # Should win 70%+ vs random
+
+    def test_strategy_vs_tight(self):
+        """Test against tight opponent."""
+        strategy = LearnedStrategy("models/latest.pkl")
+        tight_opponent = TightStrategy()
+
+        win_rate = self._play_match(strategy, tight_opponent, num_hands=5000)
+
+        # Should be profitable (>50%)
+        assert win_rate > 0.50
+
+    def test_strategy_vs_aggressive(self):
+        """Test against aggressive opponent."""
+        strategy = LearnedStrategy("models/latest.pkl")
+        aggressive = AggressiveStrategy()
+
+        win_rate = self._play_match(strategy, aggressive, num_hands=5000)
+
+        assert win_rate > 0.50
+
+    def _play_match(self, strategy1, strategy2, num_hands):
+        """Simulate match between two strategies."""
+        # Implementation would use test_server or custom simulator
+        pass
+```
+
+### Model Improvement Testing
+
+```python
+class TestModelImprovement:
+    """Verify new models outperform old ones."""
+
+    def test_new_model_vs_old_model(self):
+        """New trained model should outperform previous version."""
+        old_model = LearnedStrategy("models/v1.pkl")
+        new_model = LearnedStrategy("models/v2.pkl")
+
+        # Play 10,000 hands head-to-head
+        new_model_win_rate = self._head_to_head(new_model, old_model, 10000)
+
+        # New model should win significantly more
+        assert new_model_win_rate > 0.55  # At least 55% (statistically significant)
+
+    def _head_to_head(self, strategy1, strategy2, num_hands):
+        """Pit two strategies against each other."""
+        pass
+```
+
+---
+
+## Test Data Management
+
+### Fixtures
+
+```python
+@pytest.fixture
+def sample_game_state():
+    """Provide sample game state for tests."""
+    return {
+        "phase": "FLOP",
+        "pot": 300,
+        "players": [
+            {"id": "bot1", "chips": 2000, "bet": 0},
+            {"id": "player2", "chips": 1500, "bet": 100},
+            {"id": "player3", "chips": 2500, "bet": 0}
+        ],
+        "communityCards": ["As", "Kh", "Qd"],
+        "currentBet": 100,
+        "button": 0
+    }
+
+@pytest.fixture
+def mock_hand_evaluator():
+    """Provide mock hand evaluator."""
+    evaluator = MagicMock()
+    evaluator.evaluate_hand_strength.return_value = {
+        "strength": 0.75,
+        "hand_type": "pair",
+        "confidence": 0.8
+    }
+    return evaluator
+```
+
+### Test Data Files
+
+Store common test scenarios:
+```
+tests/
+├── fixtures/
+│   ├── sample_hands.json      # Common hand scenarios
+│   ├── board_textures.json    # Various board types
+│   └── opponent_profiles.json # Sample opponent stats
+```
+
+---
+
+## Performance Testing
+
+### Speed Tests
+
+```python
+class TestPerformance:
+    def test_hand_evaluation_speed(self):
+        """Hand evaluation should be fast (<1ms per evaluation)."""
+        evaluator = HandEvaluator()
+        hand = ["As", "Kh"]
+        board = ["Qd", "Jc", "Tc", "5s", "2h"]
+
+        import time
+        start = time.time()
+
+        for _ in range(1000):
+            evaluator.evaluate_postflop(hand, board)
+
+        elapsed = time.time() - start
+
+        # 1000 evaluations in under 1 second
+        assert elapsed < 1.0
+
+    def test_decision_speed(self):
+        """Decisions should be made quickly (<10ms)."""
+        engine = DecisionEngine(strategy=MockStrategy())
+
+        import time
+        start = time.time()
+
+        for _ in range(100):
+            engine.decide({}, {"strength": 0.5}, {}, "FLOP", "button", 0.2)
+
+        elapsed = time.time() - start
+
+        # 100 decisions in under 1 second
+        assert elapsed < 1.0
+```
+
+---
+
+## Continuous Integration
+
+### Test Organization
+
+```
+tests/
+├── unit/
+│   ├── test_hand_evaluator.py
+│   ├── test_opponent_tracker.py
+│   ├── test_decision_engine.py
+│   └── test_utils.py
+├── integration/
+│   ├── test_bot_integration.py
+│   └── test_websocket_flow.py
+├── system/
+│   ├── test_full_game.py
+│   └── test_strategy_evaluation.py
+└── fixtures/
+    └── sample_data.json
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific category
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/system/
+
+# Run with coverage
+pytest --cov=. --cov-report=html
+
+# Run specific test
+pytest tests/unit/test_hand_evaluator.py::TestHandEvaluator::test_royal_flush
+
+# Run in parallel
+pytest -n auto
+```
+
+---
+
+## Test Coverage Goals
+
+- **Unit Tests**: >90% code coverage
+- **Integration Tests**: All module interactions covered
+- **System Tests**: All critical user flows covered
+- **Edge Cases**: All known edge cases tested
+
+### Coverage Commands
+
+```bash
+# Generate coverage report
+pytest --cov=. --cov-report=term-missing
+
+# HTML coverage report
+pytest --cov=. --cov-report=html
+open htmlcov/index.html
+```
+
+---
+
+## Mocking & Test Doubles
+
+### Mocking WebSocket
+
+```python
+from unittest.mock import AsyncMock, MagicMock
+
+@pytest.mark.asyncio
+async def test_websocket_communication():
+    """Test WebSocket message handling."""
+    mock_ws = AsyncMock()
+    bot = PokerBot(...)
+
+    # Mock receiving a message
+    mock_ws.recv.return_value = json.dumps({"type": "state", ...})
+
+    await bot.handle_message(mock_ws, ...)
+
+    # Verify bot sent response
+    assert mock_ws.send.called
+```
+
+---
+
+## Best Practices Summary
+
+### Do's
+✓ Write tests before implementing features (TDD when appropriate)
+✓ Test edge cases and error conditions
+✓ Use descriptive test names
+✓ Keep tests independent (no shared state)
+✓ Mock external dependencies (WebSocket, file I/O)
+✓ Test both success and failure paths
+✓ Use fixtures for common test data
+✓ Aim for high code coverage
+✓ Run tests automatically in CI/CD
+
+### Don'ts
+✗ Don't test implementation details (test behavior, not internals)
+✗ Don't write flaky tests (must be deterministic)
+✗ Don't skip test cleanup
+✗ Don't ignore test failures
+✗ Don't write tests that depend on order
+✗ Don't test external services directly (use mocks)
+✗ Don't write overly complex tests (tests should be simple)
+
+---
+
+## Strategy Testing Checklist
+
+When testing a new strategy:
+- [ ] Does it beat random play by >70%?
+- [ ] Does it perform well vs tight opponents?
+- [ ] Does it perform well vs loose opponents?
+- [ ] Does it perform well vs aggressive opponents?
+- [ ] Does it adapt to opponent tendencies?
+- [ ] Does it avoid obvious exploitable patterns?
+- [ ] Is it profitable over 10,000+ hands?
+- [ ] Does it handle edge cases (all-in, short stack, etc.)?
+- [ ] Are decisions logged for analysis?
+- [ ] Is it reproducible (same inputs → same outputs)?
+
+Testing is crucial for a learning system - it ensures improvements are real, not regression.

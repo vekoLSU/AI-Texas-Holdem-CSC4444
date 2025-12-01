@@ -1,0 +1,665 @@
+---
+alwaysApply: true
+---
+
+# Universal Opponent Destroyer - Beat EVERY Strategy
+
+## Mission
+
+Detect and destroy ALL possible opponent strategies:
+- MCTS bots (teacher's suggestion)
+- CFR/GTO bots (Nash equilibrium seekers)
+- RL bots (reinforcement learning)
+- Rule-based bots (if-then logic)
+- Hand-strength bots (equity only)
+- Random bots (coin flippers)
+- Hybrid approaches (mixing strategies)
+- Unknown/novel strategies
+
+---
+
+## Comprehensive Opponent Detection System
+
+### Detection Framework
+
+Track EVERYTHING to identify opponent type:
+
+```python
+class UniversalOpponentDetector:
+    """Detect any opponent strategy type through behavioral analysis."""
+
+    def __init__(self):
+        # Basic statistics
+        self.hands_played = 0
+        self.vpip = 0.0  # Voluntary put in pot
+        self.pfr = 0.0   # Preflop raise
+        self.af = 0.0    # Aggression factor
+        self.wtsd = 0.0  # Went to showdown
+        self.wsd = 0.0   # Won at showdown
+
+        # Advanced pattern detection
+        self.bet_sizing_pattern = []  # Track bet sizes
+        self.timing_pattern = []      # Response times
+        self.positional_awareness = 0.0  # Does position matter to them?
+        self.hand_range_tightness = 0.0  # How tight are they?
+
+        # Strategy-specific indicators
+        self.consistency_score = 0.0  # Rule-based: very consistent
+        self.randomness_score = 0.0   # Random: high entropy
+        self.gto_deviation = 0.0      # CFR: minimal deviation
+        self.learning_rate = 0.0      # RL: improves over time
+        self.exploration_rate = 0.0   # MCTS: occasional random plays
+
+        # Exploit detection
+        self.fold_to_cbet = 0.0       # C-bet fold percentage
+        self.fold_to_3bet = 0.0       # 3-bet fold percentage
+        self.continuation_bet_freq = 0.0  # How often they c-bet
+        self.bluff_frequency = 0.0    # Estimated bluff rate
+        self.value_bet_accuracy = 0.0 # Do they value bet correctly?
+```
+
+### Strategy Type Signatures
+
+#### 1. MCTS Bot Detection
+**Behavioral Signatures:**
+- **Exploration bursts**: Occasional "weird" plays that don't fit pattern
+- **Slow response times**: Tree search takes time (>1 second)
+- **Position-aware**: Better play from late position (more simulations)
+- **Bet sizing**: Often pot-sized bets (simple abstraction)
+- **Consistency**: Moderately consistent, but occasional variance
+
+**Detection Metrics:**
+```python
+def detect_mcts(self, opponent_data):
+    indicators = {
+        "response_time_variance": high (0.5-3.0 seconds),
+        "positional_play_difference": significant (>20% better in position),
+        "bet_size_variety": low (mostly 0.5x, 1x, 2x pot),
+        "occasional_outlier_plays": moderate (5-10% of hands)
+    }
+    if all(indicators match):
+        return "MCTS", confidence
+```
+
+**Counter-Strategy:**
+- **Exploit time pressure**: MCTS degrades with limited thinking time
+- **Unpredictable bet sizing**: Break their abstractions
+- **Fast tempo**: Force them to make quick decisions
+- **Multiway pots**: MCTS struggles with >2 players
+
+#### 2. CFR/GTO Bot Detection
+**Behavioral Signatures:**
+- **Balanced play**: Exactly balanced bluff-to-value ratios
+- **Mixed strategies**: Randomizes actions (not always same play with same hand)
+- **Optimal frequencies**: Bets/raises at mathematically optimal frequencies
+- **Unexploitable**: Doesn't fall for traps or adjust to your play
+- **No tells**: Bet sizing perfectly correlated with game theory
+
+**Detection Metrics:**
+```python
+def detect_cfr(self, opponent_data):
+    indicators = {
+        "strategy_balance": very_high (bluff_rate ≈ 0.15-0.25),
+        "mixed_strategy_usage": high (same situation ≠ same action),
+        "exploitability": very_low (<0.05 bb/100),
+        "bet_sizing_optimality": high (>90% game-theoretically sound),
+        "adaptation_to_opponent": none (plays same vs everyone)
+    }
+    if all(indicators match):
+        return "CFR_GTO", confidence
+```
+
+**Counter-Strategy:**
+- **You can't exploit GTO**: Don't try to outplay, minimize losses
+- **Play your own GTO**: Match their optimal play
+- **Avoid marginal spots**: Don't get into thin value situations
+- **Wait for mistakes**: Even GTO bots have implementation errors
+- **Target other players**: Win chips from weaker opponents instead
+
+#### 3. RL Bot Detection
+**Behavioral Signatures:**
+- **Adapts over time**: Plays differently after 50-100 hands
+- **Pattern recognition**: Learns and exploits your tendencies
+- **Context-aware**: Different play based on game state
+- **Occasional exploration**: Random plays for learning (epsilon-greedy)
+- **Smooth bet sizing**: Neural net outputs, not discrete values
+
+**Detection Metrics:**
+```python
+def detect_rl(self, opponent_data):
+    indicators = {
+        "performance_improvement": gradual (win_rate increases over time),
+        "opponent_adjustment": high (changes strategy based on your play),
+        "bet_size_smoothness": high (continuous values like $47, $123),
+        "exploration_plays": low_moderate (2-10% unusual plays),
+        "response_time": fast (<100ms typically)
+    }
+    if all(indicators match):
+        return "RL_BOT", confidence
+```
+
+**Counter-Strategy:**
+- **Mislead early**: Show false patterns in first 30-50 hands
+- **Switch strategies**: Change your play after they've "learned" you
+- **Exploit exploration**: Punish their random plays
+- **Vary your timing**: Don't let them learn timing tells
+- **Counter-adapt**: Learn faster than they do
+
+#### 4. Rule-Based Bot Detection
+**Behavioral Signatures:**
+- **Extremely consistent**: Same hand = same play every time
+- **Predictable patterns**: If-then logic is discoverable
+- **No adaptation**: Plays identically hand 1 and hand 1000
+- **Discrete bet sizes**: Programmed amounts (exactly 3x BB, etc.)
+- **Position ignorance**: Often doesn't adjust for position
+
+**Detection Metrics:**
+```python
+def detect_rule_based(self, opponent_data):
+    indicators = {
+        "consistency_score": very_high (>95% same play in same spots),
+        "adaptation_score": very_low (<5% change over time),
+        "bet_size_variety": very_low (3-5 exact amounts),
+        "positional_adjustment": low_to_none,
+        "pattern_predictability": very_high (>90% predictable)
+    }
+    if all(indicators match):
+        return "RULE_BASED", confidence
+```
+
+**Counter-Strategy:**
+- **Reverse engineer**: Map out their rules (15-30 hands)
+- **Exploit rigidity**: Use positions/situations they don't handle well
+- **Bet sizing manipulation**: Use sizes their rules don't expect
+- **Trap with consistency**: If they always do X, set up for it
+- **Maximum exploitation**: They won't adjust, go all-in on edge
+
+#### 5. Hand-Strength Only Bot Detection
+**Behavioral Signatures:**
+- **Equity-based only**: Plays purely on hand strength
+- **No bluffing**: Never bets without strong hand/draw
+- **Calling station OR nit**: Either calls with equity or folds without
+- **Position blind**: Doesn't factor position into decisions
+- **Board texture blind**: Doesn't adjust for scary boards
+
+**Detection Metrics:**
+```python
+def detect_hand_strength_only(self, opponent_data):
+    indicators = {
+        "bluff_frequency": very_low (<5%),
+        "pot_odds_adherence": very_high (always correct pot odds calls),
+        "position_awareness": very_low,
+        "board_texture_adjustment": very_low,
+        "showdown_hand_quality": always reasonable (no bluff catches)
+    }
+    if all(indicators match):
+        return "HAND_STRENGTH_ONLY", confidence
+```
+
+**Counter-Strategy:**
+- **Bluff relentlessly**: They fold when they miss
+- **Never bluff-catch**: They only bet with real hands
+- **Steal blinds**: They won't defend without good hands
+- **Value bet thin**: Extract maximum when you have it
+- **Control pot size**: They're predictable, manipulate pot odds
+
+#### 6. Random/Beginner Bot Detection
+**Behavioral Signatures:**
+- **High entropy**: Actions seem random/uncorrelated with game state
+- **Terrible plays**: Obvious mistakes (fold with nuts, call with nothing)
+- **No pattern**: Can't predict their actions
+- **Extreme variance**: Win rate swings wildly
+- **Bet sizing chaos**: Random amounts with no logic
+
+**Detection Metrics:**
+```python
+def detect_random(self, opponent_data):
+    indicators = {
+        "action_entropy": very_high (approaching random),
+        "obvious_mistakes": high (>30% of plays are errors),
+        "pattern_detectability": very_low (no consistent pattern),
+        "bet_size_logic": very_low (amounts don't correlate with strength)
+    }
+    if all(indicators match):
+        return "RANDOM_BEGINNER", confidence
+```
+
+**Counter-Strategy:**
+- **Value bet everything**: They'll call with garbage
+- **Never bluff**: They don't understand fold equity
+- **Simple pot control**: Just get to showdown with best hand
+- **Avoid fancy plays**: They won't understand or fold
+- **Patience**: Let them donate chips to you
+
+#### 7. Hybrid Strategy Detection
+**Behavioral Signatures:**
+- **Mixed indicators**: Shows characteristics of multiple bot types
+- **Strategy switching**: Changes approach based on situation
+- **Sophisticated**: Combines strengths of multiple approaches
+- **Adaptive**: May use RL to blend CFR blueprint with exploitation
+
+**Detection Metrics:**
+```python
+def detect_hybrid(self, opponent_data):
+    indicators = {
+        "multi_mode_behavior": high (different plays in different spots),
+        "gto_baseline_with_adjustments": moderate_to_high,
+        "adaptive_exploitation": moderate_to_high,
+        "complexity_score": very_high
+    }
+    if all(indicators match):
+        return "HYBRID_ADVANCED", confidence
+```
+
+**Counter-Strategy:**
+- **Maximum caution**: This is a strong opponent
+- **Reduce variance**: Play solid, don't get tricky
+- **Wait for spots**: Find the weaknesses in their hybrid approach
+- **Meta-game**: Try to identify WHICH strategy they're using now
+- **Adapt continuously**: Match their adaptation rate
+
+---
+
+## Universal Counter-Strategy Matrix
+
+### Priority System
+
+```python
+def select_counter_strategy(self, opponent_type, game_state):
+    """
+    Select optimal counter-strategy based on opponent type and game state.
+    """
+
+    strategies = {
+        "MCTS": {
+            "preflop": "aggressive_positional",
+            "postflop": "fast_tempo_pressure",
+            "multiway": "avoid_or_exploit_confusion",
+            "heads_up": "variable_bet_sizing"
+        },
+
+        "CFR_GTO": {
+            "preflop": "gto_baseline",
+            "postflop": "minimize_variance",
+            "multiway": "gto_baseline",
+            "heads_up": "wait_for_mistakes"
+        },
+
+        "RL_BOT": {
+            "preflop": "misleading_patterns_early",
+            "postflop": "strategy_switching",
+            "after_50_hands": "counter_their_adaptation",
+            "exploit": "punish_exploration"
+        },
+
+        "RULE_BASED": {
+            "preflop": "pattern_discovery",
+            "postflop": "maximum_exploitation",
+            "always": "trap_with_their_rules",
+            "bet_sizing": "break_their_abstractions"
+        },
+
+        "HAND_STRENGTH_ONLY": {
+            "preflop": "aggressive_stealing",
+            "postflop": "bluff_when_they_miss",
+            "value": "extract_maximum",
+            "never": "bluff_catch"
+        },
+
+        "RANDOM_BEGINNER": {
+            "preflop": "tight_value_hands",
+            "postflop": "value_bet_everything",
+            "never": "bluff_or_fancy_plays",
+            "always": "get_to_showdown"
+        },
+
+        "HYBRID_ADVANCED": {
+            "preflop": "solid_gto_baseline",
+            "postflop": "cautious_adaptive",
+            "meta": "identify_current_mode",
+            "exploit": "find_hybrid_gaps"
+        },
+
+        "UNKNOWN": {
+            "initial": "balanced_probe_strategy",
+            "learning_phase": "gather_data_quickly",
+            "transition": "switch_to_detected_counter"
+        }
+    }
+
+    return strategies[opponent_type]
+```
+
+---
+
+## Detection Timeline
+
+### Early Game (Hands 1-20): Rapid Classification
+```python
+def rapid_classification(self, opponent_data):
+    """Classify opponent type in first 20 hands."""
+
+    # Immediate tells
+    if opponent_data.hands_played < 5:
+        # Look for obvious patterns
+        if opponent_data.vpip > 0.8:
+            return "likely_random_or_maniac"
+        if opponent_data.vpip < 0.1:
+            return "likely_ultra_tight_or_rule_based"
+
+    # 10-20 hands: More data
+    if 10 <= opponent_data.hands_played < 20:
+        # Check response times
+        if avg(opponent_data.response_times) > 2.0:
+            return "likely_mcts"
+        if std(opponent_data.response_times) < 0.05:
+            return "likely_bot_not_human"
+
+        # Check bet sizing
+        unique_bet_sizes = len(set(opponent_data.bet_sizes))
+        if unique_bet_sizes < 5:
+            return "likely_rule_based"
+        if unique_bet_sizes > 20:
+            return "likely_rl_or_human"
+
+    return "insufficient_data"
+```
+
+### Mid Game (Hands 20-100): Refinement
+```python
+def refine_classification(self, opponent_data):
+    """Refine opponent type classification."""
+
+    # Pattern analysis
+    patterns = analyze_patterns(opponent_data)
+
+    # Statistical tests
+    if patterns.consistency > 0.95:
+        if patterns.optimality > 0.85:
+            return "CFR_GTO"
+        else:
+            return "RULE_BASED"
+
+    # Adaptation detection
+    if patterns.adaptation_rate > 0.3:
+        return "RL_BOT"
+
+    # Exploration detection
+    if patterns.exploration_rate > 0.05 and patterns.response_time_var > 1.0:
+        return "MCTS"
+
+    # Hybrid detection
+    if patterns.shows_multiple_modes:
+        return "HYBRID_ADVANCED"
+
+    return "UNKNOWN"
+```
+
+### Late Game (Hands 100+): Exploitation
+```python
+def exploit_fully(self, opponent_type, opponent_data):
+    """Full exploitation with refined model."""
+
+    # By now we should KNOW their exact tendencies
+    specific_exploits = {
+        "fold_to_cbet": opponent_data.fold_to_cbet,
+        "fold_to_3bet": opponent_data.fold_to_3bet,
+        "bluff_catch_frequency": opponent_data.bluff_catch_freq,
+        "value_bet_threshold": opponent_data.value_threshold,
+        # ... 20+ specific exploitable tendencies
+    }
+
+    # Generate maximal exploit strategy
+    return generate_max_exploit_strategy(opponent_type, specific_exploits)
+```
+
+---
+
+## Multi-Opponent Strategy
+
+### Table Dynamics Assessment
+
+```python
+def assess_table_dynamics(self, all_opponents):
+    """Determine overall table strategy based on ALL opponents."""
+
+    opponent_types = [classify(opp) for opp in all_opponents]
+
+    # Table composition
+    composition = {
+        "num_gto_bots": count("CFR_GTO"),
+        "num_weak_bots": count("RULE_BASED", "HAND_STRENGTH_ONLY", "RANDOM"),
+        "num_adaptive_bots": count("RL_BOT", "MCTS"),
+        "num_advanced_bots": count("HYBRID_ADVANCED")
+    }
+
+    # Strategic approach
+    if composition["num_weak_bots"] >= 2:
+        return "EXPLOIT_WEAK_PLAYERS"  # Target fish, avoid sharks
+
+    if composition["num_gto_bots"] >= 2:
+        return "MINIMIZE_VARIANCE"  # Play solid, reduce risk
+
+    if composition["num_adaptive_bots"] >= 2:
+        return "COUNTER_ADAPTATION"  # Out-adapt them
+
+    if composition["num_advanced_bots"] >= 1:
+        return "SELECTIVE_AGGRESSION"  # Pick your spots carefully
+
+    return "BALANCED_APPROACH"
+```
+
+### Opponent Targeting
+
+```python
+def select_primary_target(self, all_opponents):
+    """Choose which opponent to exploit most heavily."""
+
+    # Rank by exploitability
+    ranked = []
+    for opp in all_opponents:
+        exploitability_score = calculate_exploitability(opp)
+        chip_stack = opp.chips
+        position_relative = calculate_position(opp)
+
+        target_value = (
+            exploitability_score * 0.5 +
+            (chip_stack / avg_stack) * 0.3 +
+            position_score * 0.2
+        )
+
+        ranked.append((opp, target_value))
+
+    # Primary target: most exploitable with significant chips
+    primary_target = max(ranked, key=lambda x: x[1])
+
+    return primary_target, generate_specific_exploit(primary_target)
+```
+
+---
+
+## Adaptation & Learning
+
+### Real-Time Strategy Updates
+
+```python
+def update_strategy_realtime(self, hand_history, results):
+    """Continuously update strategy based on results."""
+
+    for opponent in active_opponents:
+        # Did our counter-strategy work?
+        if our_counter_strategy was profitable:
+            # Intensify exploitation
+            self.exploitation_level[opponent] *= 1.2
+        else:
+            # They may be counter-adapting
+            if opponent.type == "RL_BOT" or opponent.type == "HYBRID":
+                # Switch to different exploit vector
+                self.switch_exploit_angle(opponent)
+            else:
+                # Revert to GTO baseline temporarily
+                self.exploitation_level[opponent] *= 0.8
+```
+
+### Meta-Strategy Evolution
+
+```python
+def evolve_meta_strategy(self, tournament_history):
+    """Learn from all matches to improve detection and counter-strategies."""
+
+    # What bot types are we facing most?
+    common_types = analyze_opponent_distribution(tournament_history)
+
+    # Optimize detection for common types
+    for bot_type in common_types:
+        if detection_accuracy[bot_type] < 0.95:
+            improve_detection_features(bot_type)
+
+    # Which counter-strategies work best?
+    best_counters = analyze_counter_performance(tournament_history)
+
+    # Update strategy weights
+    for bot_type, counter in best_counters.items():
+        self.strategy_weights[bot_type][counter] *= 1.3
+```
+
+---
+
+## Emergency Protocols
+
+### Unknown Strategy Handling
+
+```python
+def handle_unknown_strategy(self, opponent):
+    """What to do when facing novel/unknown strategy."""
+
+    # Step 1: Conservative play while gathering data
+    initial_strategy = "TIGHT_GTO_BASELINE"
+
+    # Step 2: Rapid testing
+    probe_strategies = [
+        "test_bluff_response",
+        "test_value_thin",
+        "test_position_awareness",
+        "test_board_texture_awareness"
+    ]
+
+    for test in probe_strategies:
+        execute_probe(test, opponent)
+        analyze_response(opponent)
+
+    # Step 3: Classification
+    classification = bayesian_classify(opponent, all_probe_results)
+
+    # Step 4: Deploy counter-strategy
+    if classification.confidence > 0.7:
+        deploy_counter(classification.type)
+    else:
+        continue_conservative_play()
+```
+
+### Counter-Adaptation Detection
+
+```python
+def detect_counter_adaptation(self, opponent):
+    """Detect if opponent is adapting to OUR strategy."""
+
+    # Compare their play now vs 20 hands ago
+    recent_behavior = opponent.last_20_hands
+    previous_behavior = opponent.hands_20_to_40_ago
+
+    significant_changes = []
+
+    if abs(recent_behavior.vpip - previous_behavior.vpip) > 0.15:
+        significant_changes.append("vpip_shift")
+
+    if abs(recent_behavior.aggression - previous_behavior.aggression) > 0.5:
+        significant_changes.append("aggression_shift")
+
+    # Are changes correlated with our exploitation?
+    if significant_changes and our_exploit_started_30_hands_ago:
+        # They're adapting to us!
+        return "COUNTER_ADAPTATION_DETECTED"
+
+    return "NO_ADAPTATION"
+```
+
+### Counter-Counter-Strategy
+
+```python
+def counter_their_counter(self, opponent):
+    """They're adapting to our exploitation - now what?"""
+
+    if opponent.type == "RL_BOT":
+        # They learned our exploit
+        # Show them false pattern, then switch
+        show_pattern_for_n_hands = 15
+        execute_pattern(false_pattern, show_pattern_for_n_hands)
+        # Then switch to opposite
+        execute_opposite_pattern()
+
+    elif opponent.type == "HYBRID":
+        # They switched modes
+        # Re-detect current mode
+        current_mode = rapid_redetect(opponent)
+        deploy_counter(current_mode)
+
+    else:
+        # Revert to GTO temporarily
+        play_gto_for_n_hands = 20
+        # Then re-exploit from different angle
+```
+
+---
+
+## Success Metrics & Validation
+
+### Counter-Strategy Effectiveness
+
+```python
+def measure_counter_effectiveness(self, opponent, counter_strategy):
+    """Measure if our counter-strategy is working."""
+
+    baseline_ev = calculate_ev_with_gto(opponent)
+    actual_ev = calculate_ev_with_counter(opponent, counter_strategy)
+
+    exploit_value = actual_ev - baseline_ev
+
+    if exploit_value > 0.05:  # +5 bb/100
+        return "HIGHLY_EFFECTIVE"
+    elif exploit_value > 0.02:  # +2 bb/100
+        return "EFFECTIVE"
+    elif exploit_value > -0.02:  # ±2 bb/100
+        return "NEUTRAL"  # Might as well play GTO
+    else:
+        return "COUNTER_PRODUCTIVE"  # They're counter-exploiting us!
+```
+
+---
+
+## Summary: The Universal Destroyer
+
+### Detection Checklist
+- [ ] Classify opponent in <20 hands (rapid)
+- [ ] Refine classification by hand 50 (accurate)
+- [ ] Detect all 7 major bot types + hybrids
+- [ ] Monitor for counter-adaptation continuously
+- [ ] Re-classify if opponent changes strategy
+
+### Exploitation Checklist
+- [ ] Deploy type-specific counter-strategy immediately
+- [ ] Measure effectiveness every 20 hands
+- [ ] Intensify if working, pivot if not
+- [ ] Handle unknown strategies conservatively
+- [ ] Switch strategies before they adapt
+
+### Multi-Opponent Checklist
+- [ ] Assess table dynamics (who to target?)
+- [ ] Prioritize exploiting weak opponents
+- [ ] Avoid marginal spots vs strong opponents
+- [ ] Adjust based on table composition
+- [ ] Maximize chips won from weakest players
+
+**The Goal:** Detect ANY opponent type within 50 hands and deploy the optimal counter-strategy to maximize profit. No matter what they throw at you - MCTS, CFR, RL, rules, random, or hybrid - you will identify it and DESTROY it.
+
+**Dominate. Adapt. Destroy. Win.** 🏆
