@@ -1,11 +1,14 @@
 import asyncio
 import json
-import websockets
+import os
 import sys
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
+
+import websockets
 from hand_evaluator import HandEvaluator
 from opponent_tracker import OpponentTracker
 from meta_controller import MetaController
+from training.data_collector import TrainingRecorder
 
 class PokerBot:
     # Poker bot main class with ensemble strategy system
@@ -32,6 +35,13 @@ class PokerBot:
         self.hands_played = 0
         self.hands_won = 0
         self.current_agent = None  # Track which agent made the decision
+        log_path = os.getenv("POKER_TRAINING_LOG", "logs/training_decisions.jsonl")
+        env_flag = os.getenv("POKER_ENABLE_TRAINING_LOGS", "1").lower()
+        self.training_logs_enabled = env_flag not in {"0", "false", "off", "no"}
+        self.training_recorder = TrainingRecorder(log_path=log_path, enabled=self.training_logs_enabled)
+        self.current_hand_id: Optional[int] = None
+        self.hand_start_stack: int = 0
+        self.last_known_stack: int = 0
         
     def get_ws_url(self) -> str:
         # Build WebSocket URL
@@ -61,6 +71,9 @@ class PokerBot:
         except Exception as e:
             print(f"❌ Connection error: {e}")
             raise
+        finally:
+            if self.training_recorder:
+                self.training_recorder.flush()
     
     async def send_message(self, ws, message: dict):
         # Send message to server
@@ -107,6 +120,12 @@ class PokerBot:
             print(f"[DEBUG] handle_state_update: players={players}")
             our_player = self.find_our_player(players)
             print(f"[DEBUG] handle_state_update: our_player={our_player}")
+
+            if our_player:
+                if self.current_hand_id != hand_num:
+                    self.current_hand_id = hand_num
+                    self.hand_start_stack = our_player.get("chips", 0)
+                self.last_known_stack = our_player.get("chips", self.last_known_stack)
 
             if not our_player:
                 print("[DEBUG] No our_player found, skipping turn.")
@@ -209,6 +228,21 @@ class PokerBot:
                 self.current_agent = decision["meta"]["agent"]
                 print(f"[ENSEMBLE] Agent: {self.current_agent} | Opponent: {decision['meta']['opponent_type']} | Confidence: {decision['meta']['confidence']:.2f}")
 
+            self._record_training_decision(
+                hand_id=hand_num,
+                phase=phase,
+                position=position,
+                hand_strength=hand_strength,
+                decision=decision,
+                pot=pot,
+                to_call=to_call,
+                our_chips=our_chips,
+                num_players=num_active_players,
+                current_bet=current_bet,
+                opponent_profiles=opponent_profiles,
+                players_snapshot=clean_players,
+            )
+
             # Format action for server
             action_type = decision["action"]
 
@@ -303,6 +337,66 @@ class PokerBot:
         print(f"{'='*60}\n")
 
         self.hands_played += 1
+        self._record_training_outcome(msg, winner == self.player)
+
+    def _record_training_decision(
+        self,
+        *,
+        hand_id: int,
+        phase: str,
+        position: str,
+        hand_strength: Dict,
+        decision: Dict,
+        pot: int,
+        to_call: int,
+        our_chips: int,
+        num_players: int,
+        current_bet: int,
+        opponent_profiles: List[Dict],
+        players_snapshot: List[Dict],
+    ) -> None:
+        if not self.training_logs_enabled or not self.training_recorder:
+            return
+
+        state_snapshot = {
+            "pot": pot,
+            "to_call": to_call,
+            "our_chips": our_chips,
+            "num_players": num_players,
+            "current_bet": current_bet,
+            "hand_cards": self.hand_cards,
+            "community_cards": self.community_cards,
+            "players": players_snapshot,
+        }
+
+        self.training_recorder.record_decision(
+            hand_id=hand_id,
+            phase=phase,
+            position=position,
+            hand_strength={
+                "strength": hand_strength.get("strength", 0.0),
+                "hand_type": hand_strength.get("hand_type", "unknown"),
+                "draw_potential": hand_strength.get("draw_potential", 0.0),
+            },
+            state_snapshot=state_snapshot,
+            opponent_profiles=opponent_profiles,
+            decision=decision,
+            agent_meta=decision.get("meta", {}),
+            extra={"player_id": self.player},
+        )
+
+    def _record_training_outcome(self, showdown_msg: dict, won: bool) -> None:
+        if not self.training_logs_enabled or not self.training_recorder or self.current_hand_id is None:
+            return
+
+        chips_delta = self.last_known_stack - self.hand_start_stack
+        outcome = {
+            "won": won,
+            "winner": showdown_msg.get("winner"),
+            "pot": showdown_msg.get("pot", 0),
+            "chips_delta": chips_delta,
+        }
+        self.training_recorder.record_outcome(self.current_hand_id, outcome)
 
 
 async def main():

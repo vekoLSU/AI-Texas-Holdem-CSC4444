@@ -1,6 +1,10 @@
-from typing import List, Tuple, Dict
+from typing import Any, Dict, List, Tuple, Union
 from collections import Counter
 import itertools
+
+
+CardInput = Union[str, Dict[str, Any], Tuple[Any, Any], List[Any]]
+
 
 class HandEvaluator:
     # Poker hand evaluator
@@ -35,7 +39,7 @@ class HandEvaluator:
     def __init__(self):
         pass
     
-    def evaluate_hand_strength(self, hole_cards: List[str], community_cards: List[str], phase: str) -> Dict:
+    def evaluate_hand_strength(self, hole_cards: List[CardInput], community_cards: List[CardInput], phase: str) -> Dict:
         # Get hand strength
         
         if phase == "PREFLOP":
@@ -43,7 +47,7 @@ class HandEvaluator:
         else:
             return self.evaluate_postflop(hole_cards, community_cards, phase)
     
-    def evaluate_preflop(self, hole_cards: List[str]) -> Dict:
+    def evaluate_preflop(self, hole_cards: List[CardInput]) -> Dict:
         # Preflop strength
         if len(hole_cards) != 2:
             return {"strength": 0.0, "hand_type": "unknown", "confidence": 0.0}
@@ -139,7 +143,7 @@ class HandEvaluator:
         # Normalize to 0-1 range
         return min(max(score / 20.0, 0.0), 1.0)
     
-    def evaluate_postflop(self, hole_cards: List[str], community_cards: List[str], phase: str) -> Dict:
+    def evaluate_postflop(self, hole_cards: List[CardInput], community_cards: List[CardInput], phase: str) -> Dict:
         """Evaluate hand strength after the flop"""
         all_cards = hole_cards + community_cards
         
@@ -167,7 +171,7 @@ class HandEvaluator:
             "confidence": 0.9
         }
     
-    def find_best_hand(self, cards: List[str]) -> Dict:
+    def find_best_hand(self, cards: List[CardInput]) -> Dict:
         """Find the best 5-card poker hand from available cards"""
         if len(cards) < 5:
             return {"type": "incomplete", "rank": 0, "high_cards": []}
@@ -186,7 +190,7 @@ class HandEvaluator:
         
         return best_hand
     
-    def classify_hand(self, cards: List[str]) -> Dict:
+    def classify_hand(self, cards: List[CardInput]) -> Dict:
         """Classify a 5-card hand"""
         if len(cards) != 5:
             return {"type": "incomplete", "rank": 0}
@@ -257,7 +261,7 @@ class HandEvaluator:
         
         return False
     
-    def calculate_draw_potential(self, hole_cards: List[str], community_cards: List[str], phase: str) -> float:
+    def calculate_draw_potential(self, hole_cards: List[CardInput], community_cards: List[CardInput], phase: str) -> float:
         """Calculate potential for improving hand on future streets"""
         if phase == "RIVER":
             return 0.0  # No more cards coming
@@ -298,8 +302,9 @@ class HandEvaluator:
         
         # Overcards
         hole_ranks = [self.CARD_VALUES[self.parse_card(c)[0]] for c in hole_cards]
-        community_ranks = [self.CARD_VALUES[self.parse_card(c)[0]] for c in community_cards]
-        overcards = sum(1 for hr in hole_ranks if hr > max(community_ranks))
+        community_ranks = [self.CARD_VALUES[self.parse_card(c)[0]] for c in community_cards] if community_cards else []
+        max_community = max(community_ranks) if community_ranks else 0
+        overcards = sum(1 for hr in hole_ranks if hr > max_community)
         
         if overcards > 0:
             draw_score += overcards * 0.1
@@ -355,8 +360,72 @@ class HandEvaluator:
         
         return strength_map.get(hand_rank, 0.2)
     
-    def parse_card(self, card: str) -> Tuple[str, str]:
-        """Parse card string into rank and suit (e.g., 'As' -> ('A', 's'))"""
-        if len(card) >= 2:
-            return card[0], card[1]
-        return 'X', 'x'  # Invalid card
+    def parse_card(self, card: CardInput) -> Tuple[str, str]:
+        """
+        Parse a card coming from various sources into (rank, suit_digit).
+        Supports engine JSON objects, tuples, and classic string formats.
+        """
+        if isinstance(card, dict):
+            rank = self._normalize_rank(card.get("rank"))
+            suit = self._normalize_suit(card.get("suit"))
+            return rank, suit
+
+        if isinstance(card, (tuple, list)) and len(card) >= 2:
+            rank = self._normalize_rank(card[0])
+            suit = self._normalize_suit(card[1])
+            return rank, suit
+
+        if isinstance(card, str):
+            text = card.strip()
+            if not text:
+                return "X", "x"
+            if len(text) >= 2 and text[0].isdigit() and text[1].isdigit():
+                # Handle formats like "10h"
+                rank_part = text[:-1]
+                suit_part = text[-1]
+            else:
+                rank_part = text[0]
+                suit_part = text[1] if len(text) > 1 else ""
+            return self._normalize_rank(rank_part), self._normalize_suit(suit_part)
+
+        return "X", "x"
+
+    def _normalize_rank(self, raw_rank: Any) -> str:
+        """Normalize rank representations to single-character format."""
+        if raw_rank is None:
+            return "X"
+
+        rank_str = str(raw_rank).upper()
+        if rank_str in self.CARD_VALUES:
+            return rank_str
+
+        # Convert alternate representations
+        if rank_str in {"10", "T10"}:
+            return "T"
+        if rank_str == "1":  # Ace sometimes encoded as 1
+            return "A"
+
+        return rank_str[:1] if rank_str else "X"
+
+    def _normalize_suit(self, raw_suit: Any) -> str:
+        """Normalize suits to single-letter notation."""
+        if raw_suit is None:
+            return "x"
+
+        suit_str = str(raw_suit).upper()
+        suit_map = {
+            "HEART": "h",
+            "HEARTS": "h",
+            "DIAMOND": "d",
+            "DIAMONDS": "d",
+            "CLUB": "c",
+            "CLUBS": "c",
+            "SPADE": "s",
+            "SPADES": "s",
+            "H": "h",
+            "D": "d",
+            "C": "c",
+            "S": "s"
+        }
+
+        return suit_map.get(suit_str, suit_str.lower()[:1] if suit_str else "x")

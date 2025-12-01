@@ -39,6 +39,15 @@ python bot.py dev table-1 TestBot ws://localhost:8080
 python competition_adapter.py dev table-1 MyBot ws://localhost:8080
 ```
 
+## Training Setup
+1. **Collect decisions** – Logging is enabled by default. Run the bot and it will write JSON lines to `logs/training_decisions.jsonl`. Customize the path with `POKER_TRAINING_LOG=/tmp/decisions.jsonl`.
+2. **Train models** – Once you have data, run:
+   ```bash
+   python -m training.train_agent --log-path logs/training_decisions.jsonl --agent-name gto --epochs 20
+   ```
+   Trained weights are stored under `models/` for easy loading later.
+3. **Key modules** – `training/data_collector.py` handles logging, `training/state_encoder.py` normalizes features, and `training/train_agent.py` provides a ready-to-run training loop using PyTorch.
+
 ## Troubleshooting
 - If you see connection errors, make sure the server is running first.
 - To free up port 8080:
