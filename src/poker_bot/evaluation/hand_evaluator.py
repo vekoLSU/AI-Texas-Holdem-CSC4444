@@ -146,23 +146,28 @@ class HandEvaluator:
     def evaluate_postflop(self, hole_cards: List[CardInput], community_cards: List[CardInput], phase: str) -> Dict:
         """Evaluate hand strength after the flop"""
         all_cards = hole_cards + community_cards
-        
+
         if len(all_cards) < 5:
             # Can't make a full hand yet
             return {"strength": 0.3, "hand_type": "incomplete", "confidence": 0.5}
-        
+
         # Find best 5-card combination
         best_hand = self.find_best_hand(all_cards)
-        
-        # Calculate hand strength based on made hand
-        base_strength = self.get_hand_base_strength(best_hand)
-        
+
+        # Calculate hand strength based on made hand with context
+        base_strength = self.get_hand_base_strength_contextual(best_hand, hole_cards, community_cards)
+
         # Calculate draw potential
         draw_strength = self.calculate_draw_potential(hole_cards, community_cards, phase)
-        
-        # Combine made hand and draw strength
-        total_strength = base_strength * 0.7 + draw_strength * 0.3
-        
+
+        # Combine made hand and draw strength (reduce draw weight for strong hands)
+        if base_strength >= 0.70:
+            # Strong hands: focus on made hand
+            total_strength = base_strength * 0.9 + draw_strength * 0.1
+        else:
+            # Weaker hands: draws matter more
+            total_strength = base_strength * 0.7 + draw_strength * 0.3
+
         return {
             "strength": min(total_strength, 1.0),
             "hand_type": best_hand["type"],
@@ -341,9 +346,9 @@ class HandEvaluator:
         return False
     
     def get_hand_base_strength(self, hand: Dict) -> float:
-        """Convert hand rank to strength value"""
+        """Convert hand rank to strength value (legacy method - use contextual version)"""
         hand_rank = hand.get("rank", 1)
-        
+
         # Map rank to strength (0.0 to 1.0)
         strength_map = {
             10: 1.00,  # Royal Flush
@@ -352,13 +357,126 @@ class HandEvaluator:
             7: 0.85,   # Full House
             6: 0.75,   # Flush
             5: 0.65,   # Straight
-            4: 0.55,   # Three of a Kind
-            3: 0.45,   # Two Pair
-            2: 0.35,   # Pair
+            4: 0.75,   # Three of a Kind (FIXED: was 0.55)
+            3: 0.55,   # Two Pair (FIXED: was 0.45)
+            2: 0.40,   # Pair (base - will be adjusted by context)
             1: 0.20,   # High Card
         }
-        
+
         return strength_map.get(hand_rank, 0.2)
+
+    def get_hand_base_strength_contextual(self, hand: Dict, hole_cards: List[CardInput], community_cards: List[CardInput]) -> float:
+        """Context-aware hand strength evaluation"""
+        hand_rank = hand.get("rank", 1)
+        hand_type = hand.get("type", "high_card")
+        high_cards = hand.get("high_cards", [])
+
+        # Parse hole cards
+        hole_ranks = [self.CARD_VALUES[self.parse_card(c)[0]] for c in hole_cards]
+        community_ranks = [self.CARD_VALUES[self.parse_card(c)[0]] for c in community_cards]
+
+        # Base strength from hand type
+        base_strength = self.get_hand_base_strength(hand)
+
+        # Context adjustments for pairs
+        if hand_type == "pair" and len(high_cards) > 0:
+            pair_rank = max(r for r in high_cards if high_cards.count(r) >= 2)
+            max_board_rank = max(community_ranks) if community_ranks else 0
+
+            # Overpair: both hole cards higher than all board cards
+            if len(hole_ranks) == 2 and hole_ranks[0] == hole_ranks[1] and hole_ranks[0] > max_board_rank:
+                # Pocket pair that's an overpair
+                if pair_rank >= 13:  # AA/KK
+                    base_strength = 0.85
+                elif pair_rank >= 11:  # QQ/JJ
+                    base_strength = 0.80
+                elif pair_rank >= 9:  # TT/99
+                    base_strength = 0.75
+                else:  # 88 and below
+                    base_strength = 0.70
+            # Top pair: paired with highest board card
+            elif pair_rank == max_board_rank:
+                # Check kicker strength
+                kicker = max([r for r in hole_ranks if r != pair_rank], default=0)
+                if kicker >= 12:  # A or K kicker
+                    base_strength = 0.65
+                elif kicker >= 10:  # Q/J kicker
+                    base_strength = 0.60
+                else:
+                    base_strength = 0.55
+            # Middle pair
+            elif pair_rank > min(community_ranks) and pair_rank < max_board_rank:
+                base_strength = 0.45
+            # Bottom pair or weak pair
+            else:
+                base_strength = 0.35
+
+        # Context adjustments for three of a kind
+        elif hand_type == "three_of_kind":
+            # Trips are very strong - check if it's set (pocket pair) or trips (board pair)
+            trip_rank = max(r for r in high_cards if high_cards.count(r) >= 3)
+            is_set = len(hole_ranks) == 2 and hole_ranks[0] == hole_ranks[1]
+
+            if is_set:
+                # Set (pocket pair + one on board) - very strong, well-disguised
+                base_strength = 0.85
+            else:
+                # Trips (one in hand + pair on board) - still very strong
+                base_strength = 0.78
+
+        # Context adjustments for two pair
+        elif hand_type == "two_pair":
+            # Check if both pairs use hole cards (very strong) vs one pair from board
+            pairs = [r for r in set(high_cards) if high_cards.count(r) >= 2]
+            if len(pairs) >= 2:
+                top_pair = max(pairs)
+                if top_pair >= 12:  # Ace or King high two pair
+                    base_strength = 0.70
+                else:
+                    base_strength = 0.65
+
+        # Adjust for board texture danger
+        board_danger = self.assess_board_danger(community_cards)
+        if board_danger > 0.3 and hand_rank <= 5:  # Dangerous board for weaker hands
+            base_strength *= (1.0 - board_danger * 0.2)
+
+        return min(base_strength, 1.0)
+
+    def assess_board_danger(self, community_cards: List[CardInput]) -> float:
+        """Assess how dangerous/coordinated the board is"""
+        if len(community_cards) < 3:
+            return 0.0
+
+        parsed = [self.parse_card(c) for c in community_cards]
+        ranks = [self.CARD_VALUES[r] for r, s in parsed]
+        suits = [s for r, s in parsed]
+
+        danger = 0.0
+
+        # Flush danger
+        suit_counts = Counter(suits)
+        max_suit_count = max(suit_counts.values())
+        if max_suit_count >= 3:
+            danger += 0.3
+        if max_suit_count >= 4:
+            danger += 0.3
+
+        # Straight danger
+        unique_ranks = sorted(set(ranks))
+        if len(unique_ranks) >= 3:
+            for i in range(len(unique_ranks) - 2):
+                if unique_ranks[i+2] - unique_ranks[i] <= 4:
+                    danger += 0.2
+                    break
+
+        # Paired board danger
+        rank_counts = Counter(ranks)
+        if 2 in rank_counts.values():
+            danger += 0.15
+        if 3 in rank_counts.values():
+            danger += 0.3
+
+        return min(danger, 1.0)
     
     def parse_card(self, card: CardInput) -> Tuple[str, str]:
         """
