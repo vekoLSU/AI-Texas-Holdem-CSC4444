@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from poker_bot.agents import GTOAgent, ExploiterAgent, DefenderAgent
+from poker_bot.agents import GTOAgent, ExploiterAgent, DefenderAgent, RLSuitedAgent
 from poker_bot.evaluation import OpponentTracker
 
 
@@ -26,7 +26,7 @@ class MetaController:
 
     def __init__(self, opponent_tracker: OpponentTracker):
         """
-        Initialize meta-controller with three specialist agents.
+        Initialize meta-controller with four specialist agents.
 
         Args:
             opponent_tracker: OpponentTracker instance for opponent classification
@@ -34,6 +34,7 @@ class MetaController:
         self.agent_gto = GTOAgent()
         self.agent_exploiter = ExploiterAgent()
         self.agent_defender = DefenderAgent()
+        self.agent_rl_suited = RLSuitedAgent()  # New: RL agent with suit information
 
         self.opponent_tracker = opponent_tracker
 
@@ -42,6 +43,7 @@ class MetaController:
             "gto": 0,
             "exploiter": 0,
             "defender": 0,
+            "rl_suited": 0,
             "ensemble": 0
         }
 
@@ -49,6 +51,7 @@ class MetaController:
             "gto": {"wins": 0, "losses": 0},
             "exploiter": {"wins": 0, "losses": 0},
             "defender": {"wins": 0, "losses": 0},
+            "rl_suited": {"wins": 0, "losses": 0},
             "ensemble": {"wins": 0, "losses": 0}
         }
 
@@ -147,8 +150,12 @@ class MetaController:
             return self.agent_exploiter, "exploiter"
 
         # OPPONENT TYPE BASED SELECTION
-        # Exploit weak opponents (Agent B)
-        if opp_type in ["random", "weak", "fish", "rock", "nit", "rule_based", "hand_strength_only"]:
+        # Use RL agent vs weak/passive opponents (Agent D)
+        if opp_type in ["fish", "rock", "nit", "hand_strength_only"] and self.agent_rl_suited.loaded:
+            return self.agent_rl_suited, "rl_suited"
+
+        # Exploit weak/random opponents (Agent B)
+        if opp_type in ["random", "weak", "rule_based"]:
             return self.agent_exploiter, "exploiter"
 
         # Defend vs aggressive (Agent C)
@@ -190,7 +197,7 @@ class MetaController:
         All three agents vote, and we combine their recommendations.
         """
 
-        # Get votes from all three agents
+        # Get votes from all four agents
         vote_gto = self.agent_gto.decide(
             hand_cards, community_cards, hand_strength, phase,
             pot, to_call, our_chips, position, num_players,
@@ -209,11 +216,18 @@ class MetaController:
             opponent_profiles, current_bet
         )
 
+        vote_rl_suited = self.agent_rl_suited.decide(
+            hand_cards, community_cards, hand_strength, phase,
+            pot, to_call, our_chips, position, num_players,
+            opponent_profiles, current_bet
+        )
+
         # Weight votes by agent reliability
         weights = {
-            "gto": 0.4,       # Always reliable
-            "exploiter": 0.4,  # High upside
-            "defender": 0.2    # Conservative fallback
+            "gto": 0.3,        # Always reliable
+            "exploiter": 0.3,  # High upside
+            "defender": 0.2,   # Conservative fallback
+            "rl_suited": 0.2   # Trained neural network
         }
 
         # Voting methods:
@@ -223,7 +237,8 @@ class MetaController:
         actions = [
             vote_gto.get("action"),
             vote_exploiter.get("action"),
-            vote_defender.get("action")
+            vote_defender.get("action"),
+            vote_rl_suited.get("action")
         ]
 
         # Count votes for each action
@@ -239,12 +254,14 @@ class MetaController:
             amounts = [
                 vote_gto.get("amount", 0),
                 vote_exploiter.get("amount", 0),
-                vote_defender.get("amount", 0)
+                vote_defender.get("amount", 0),
+                vote_rl_suited.get("amount", 0)
             ]
             weighted_amounts = [
                 amounts[0] * weights["gto"],
                 amounts[1] * weights["exploiter"],
-                amounts[2] * weights["defender"]
+                amounts[2] * weights["defender"],
+                amounts[3] * weights["rl_suited"]
             ]
             final_amount = sum(weighted_amounts)
         else:
@@ -258,7 +275,8 @@ class MetaController:
             "votes": {
                 "gto": vote_gto.get("action"),
                 "exploiter": vote_exploiter.get("action"),
-                "defender": vote_defender.get("action")
+                "defender": vote_defender.get("action"),
+                "rl_suited": vote_rl_suited.get("action")
             }
         }
 
@@ -415,7 +433,7 @@ class MetaController:
             "win_rates": {}
         }
 
-        for agent in ["gto", "exploiter", "defender", "ensemble"]:
+        for agent in ["gto", "exploiter", "defender", "rl_suited", "ensemble"]:
             wins = self.agent_results[agent]["wins"]
             losses = self.agent_results[agent]["losses"]
             total = wins + losses
