@@ -38,6 +38,10 @@ class PokerBot:
         env_flag = os.getenv("POKER_ENABLE_TRAINING_LOGS", "1").lower()
         self.training_logs_enabled = env_flag not in {"0", "false", "off", "no"}
         self.training_recorder = TrainingRecorder(log_path=log_path, enabled=self.training_logs_enabled)
+
+        # Opponent action tracking
+        self.previous_state = None
+        self.previous_players = {}
         self.current_hand_id: Optional[int] = None
         self.hand_start_stack: int = 0
         self.last_known_stack: int = 0
@@ -129,6 +133,14 @@ class PokerBot:
             if not our_player:
                 print("[DEBUG] No our_player found, skipping turn.")
                 return
+
+            # Track opponent actions by comparing state changes
+            if self.previous_state and self.previous_players:
+                self._track_opponent_actions(state, players, phase)
+
+            # Update tracking state for next comparison
+            self.previous_state = state
+            self.previous_players = {p.get("id"): p for p in players}
 
             # Check if it's our turn
             current_player = state.get("currentPlayer")
@@ -269,6 +281,63 @@ class PokerBot:
             traceback.print_exc()
             return None
     
+    def _track_opponent_actions(self, current_state: dict, current_players: List[dict], phase: str):
+        """
+        Track opponent actions by comparing state changes.
+        Infers actions from chip and bet changes between states.
+        """
+        current_bet = current_state.get("currentBet", 0)
+
+        for player in current_players:
+            player_id = player.get("id")
+
+            # Skip ourselves
+            if player_id == self.player:
+                continue
+
+            # Get previous state for this player
+            prev_player = self.previous_players.get(player_id)
+            if not prev_player:
+                continue
+
+            # Detect action from state changes
+            curr_chips = player.get("chips", 0)
+            prev_chips = prev_player.get("chips", 0)
+            curr_bet = player.get("bet", 0)
+            prev_bet = prev_player.get("bet", 0)
+            folded = player.get("folded", False)
+            prev_folded = prev_player.get("folded", False)
+
+            # Determine action
+            action = None
+            amount = 0
+
+            if folded and not prev_folded:
+                action = "fold"
+                amount = 0
+            elif curr_bet > prev_bet:
+                chips_added = prev_chips - curr_chips
+                if curr_bet > current_bet:
+                    action = "raise"
+                    amount = curr_bet
+                else:
+                    action = "call"
+                    amount = chips_added
+            elif curr_bet == current_bet and curr_bet > prev_bet:
+                action = "call"
+                amount = curr_bet - prev_bet
+            elif prev_bet == 0 and curr_bet == 0:
+                # Could be a check, but only record if we're certain they acted
+                # Skip for now to avoid noise
+                continue
+            else:
+                continue  # No clear action detected
+
+            # Record the action if we detected one
+            if action:
+                self.opponent_tracker.record_action(player_id, action, amount, phase)
+                print(f"[TRACKING] {player_id}: {action} ${amount} in {phase}")
+
     def get_position(self, players: List[dict], our_player: dict) -> str:
         # Get table position
         active_players = [p for p in players if not p.get("folded", False)]
@@ -300,6 +369,18 @@ class PokerBot:
         won = (winner == self.player)
         if self.current_agent:
             self.meta_controller.record_hand_result(self.current_agent, won)
+
+        # Record hand results for opponent tracking
+        if self.game_state:
+            players = self.game_state.get("players", [])
+            for player in players:
+                player_id = player.get("id")
+                if player_id:
+                    player_won = (player_id == winner)
+                    # Estimate chips delta (approximation)
+                    chips_delta = pot if player_won else -player.get("bet", 0)
+                    self.opponent_tracker.record_hand_result(player_id, player_won, chips_delta)
+                    print(f"[TRACKING] {player_id}: hand result - won={player_won}, delta=${chips_delta}")
 
         print(f"\n{'='*60}")
         print(f"🎰 SHOWDOWN RESULTS")
