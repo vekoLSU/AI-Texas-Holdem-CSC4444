@@ -1,0 +1,614 @@
+---
+alwaysApply: false
+---
+
+# Poker Domain Knowledge
+
+## Purpose
+This file defines poker terminology, concepts, and mathematical foundations. It does NOT prescribe strategies - that's for the ML system to learn.
+
+---
+
+## Competition Infrastructure Protocol
+
+**CRITICAL:** The dtaing11/Texas-HoldEm-Infrastructure uses specific JSON formats that differ from string-based representations!
+
+### Card Representation (Infrastructure Format)
+**MUST USE THIS FORMAT:**
+```json
+{"rank": "A", "suit": "SPADE"}
+{"rank": "K", "suit": "HEART"}
+{"rank": "Q", "suit": "DIAMOND"}
+{"rank": "J", "suit": "CLUB"}
+{"rank": "T", "suit": "SPADE"}
+{"rank": "9", "suit": "HEART"}
+```
+
+**Rank Values:** "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"
+
+**Suit Values (UPPERCASE!):** "SPADE", "HEART", "DIAMOND", "CLUB"
+
+**DO NOT USE:** String format like "As", "Kh", "Qd" (this is for internal representation only, must convert for protocol)
+
+### WebSocket Message Formats
+
+**Client → Server (EXACT FORMAT):**
+```json
+// Join table
+{"type": "join"}
+
+// Call
+{"type": "action", "action": "call"}
+
+// Check
+{"type": "action", "action": "check"}
+
+// Fold
+{"type": "action", "action": "fold"}
+
+// Raise (must include amount)
+{"type": "action", "action": "raise", "amount": 120}
+```
+
+**Server → Client:**
+```json
+// State update
+{
+  "type": "state",
+  "hand": 2,
+  "phase": "TURN",
+  "pot": 540,
+  "players": [
+    {
+      "id": "player1",
+      "chips": 2000,
+      "action": "CALL",
+      "cards": [
+        {"rank": "A", "suit": "SPADE"},
+        {"rank": "K", "suit": "HEART"}
+      ]
+    }
+  ],
+  "communityCards": [
+    {"rank": "Q", "suit": "DIAMOND"},
+    {"rank": "J", "suit": "CLUB"},
+    {"rank": "T", "suit": "SPADE"}
+  ]
+}
+
+// Error
+{"type": "error", "message": "Not your turn"}
+```
+
+### Game Phase Enum Values (EXACT CASE)
+- `WAITING` - Players connecting
+- `PREFLOP` - Hole cards dealt, first betting round
+- `FLOP` - Three community cards
+- `TURN` - Fourth community card
+- `RIVER` - Fifth community card
+- `SHOWDOWN` - Hand evaluation
+
+### Action Types (EXACT CASE)
+- `CHECK` - Pass without betting (only if no bet to call)
+- `CALL` - Match current bet
+- `RAISE` - Increase bet (requires amount field)
+- `FOLD` - Give up hand
+
+### Player States
+- `INHAND` - Active in hand
+- `FOLDED` - Folded
+- `ALLIN` - All chips in pot
+
+---
+
+## Game Basics
+
+### Texas Hold'em Structure
+- Each player receives 2 hole cards (private)
+- 5 community cards dealt in phases: Flop (3), Turn (1), River (1)
+- Players make best 5-card hand from their 7 available cards
+- Betting rounds: PREFLOP, FLOP, TURN, RIVER
+
+### Internal Card Representation (For Bot Logic)
+After parsing from infrastructure, you may convert to simpler format:
+- **Format**: Rank + Suit (e.g., "As" = Ace of Spades)
+- **Ranks**: 2, 3, 4, 5, 6, 7, 8, 9, T (Ten), J (Jack), Q (Queen), K (King), A (Ace)
+- **Suits**: s (spades), h (hearts), c (clubs), d (diamonds)
+- **Examples**: "Kh" (King of Hearts), "Tc" (Ten of Clubs), "2d" (Two of Diamonds)
+
+**Conversion Functions Required:**
+```python
+def card_from_infrastructure(card_obj: dict) -> str:
+    """Convert infrastructure card to internal format."""
+    suit_map = {"SPADE": "s", "HEART": "h", "DIAMOND": "d", "CLUB": "c"}
+    return f"{card_obj['rank']}{suit_map[card_obj['suit']]}"
+
+def card_to_infrastructure(card_str: str) -> dict:
+    """Convert internal format to infrastructure card."""
+    suit_map = {"s": "SPADE", "h": "HEART", "d": "DIAMOND", "c": "CLUB"}
+    return {"rank": card_str[0], "suit": suit_map[card_str[1]]}
+```
+
+---
+
+## Hand Rankings (Highest to Lowest)
+
+### 1. Royal Flush
+- A, K, Q, J, T all of the same suit
+- Example: As, Ks, Qs, Js, Ts
+- Unbeatable hand
+
+### 2. Straight Flush
+- Five consecutive cards of the same suit
+- Example: 9h, 8h, 7h, 6h, 5h
+- Higher card wins between straight flushes
+
+### 3. Four of a Kind (Quads)
+- Four cards of the same rank
+- Example: Kd, Kh, Kc, Ks, 7d
+- Kicker breaks ties
+
+### 4. Full House (Boat)
+- Three of a kind + a pair
+- Example: Qd, Qh, Qc, 8s, 8d
+- Three-of-a-kind rank determines winner
+
+### 5. Flush
+- Five cards of the same suit, not consecutive
+- Example: Ad, Jd, 9d, 6d, 2d
+- Highest card(s) break ties
+
+### 6. Straight
+- Five consecutive cards of mixed suits
+- Example: Td, 9h, 8s, 7c, 6d
+- Ace can be high (A-K-Q-J-T) or low (5-4-3-2-A)
+
+### 7. Three of a Kind (Trips/Set)
+- Three cards of the same rank
+- Example: 7h, 7d, 7c, Ks, 4h
+- **Set**: Pocket pair + board card
+- **Trips**: Two board cards + one hole card
+
+### 8. Two Pair
+- Two different pairs
+- Example: Jh, Jd, 5c, 5s, Ah
+- Higher pair determines winner, then kicker
+
+### 9. One Pair
+- Two cards of the same rank
+- Example: 9d, 9h, Kc, 8s, 3d
+- Pair rank determines winner, then kickers
+
+### 10. High Card
+- No made hand
+- Example: As, Jh, 9d, 6c, 3s
+- Highest card(s) determine winner
+
+---
+
+## Game Phases
+
+### PREFLOP
+- Players have seen their 2 hole cards
+- No community cards yet
+- Blinds are posted (small blind, big blind)
+- First betting round
+
+### FLOP
+- 3 community cards dealt face-up
+- Second betting round
+- Players can now make stronger hands
+
+### TURN
+- 4th community card dealt
+- Third betting round
+- One card left to come
+
+### RIVER
+- 5th and final community card dealt
+- Final betting round
+- All cards revealed
+
+### SHOWDOWN
+- Players reveal hands
+- Best hand wins the pot
+- No more betting
+
+---
+
+## Actions
+
+### fold
+- Give up the hand and forfeit any chips already bet
+- Can be done at any time during betting
+
+### check
+- Pass action to next player without betting
+- Only available if no bet has been made
+
+### call
+- Match the current bet amount
+- Moves action forward
+
+### raise
+- Increase the current bet
+- Forces other players to call the new amount or fold
+
+### all_in
+- Bet all remaining chips
+- No further action possible in this hand
+
+---
+
+## Positions
+
+### Blinds
+- **small_blind**: Posts mandatory small bet before cards dealt
+- **big_blind**: Posts mandatory big bet (usually 2x small blind)
+
+### Position Order (Relative to Button)
+1. **early**: First to act (under the gun, UTG+1, etc.)
+2. **middle**: Middle positions
+3. **late**: Last to act (cutoff, button)
+4. **button**: Dealer position, acts last postflop (best position)
+5. **heads_up**: Only two players remaining
+
+### Position Advantage
+- Later positions have more information (see others act first)
+- Button has maximum positional advantage postflop
+- Blinds have worst position postflop
+
+---
+
+## Pot Odds & Equity
+
+### Pot Odds
+- Ratio of current pot size to the cost of a call
+- Formula: `pot_odds = to_call / (pot + to_call)`
+- Example: Pot is $100, must call $20 → pot odds = 20 / 120 = 16.7%
+
+### Equity
+- Probability of winning the hand
+- Can be calculated via simulation or hand range analysis
+- Compare equity to pot odds to determine mathematical profitability
+
+### Expected Value (EV)
+- Average profit/loss of a decision over infinite repetitions
+- Formula: `EV = (win_probability × pot_won) - (loss_probability × amount_risked)`
+- Positive EV decisions are mathematically correct
+
+### Outs
+- Cards that improve your hand to likely best hand
+- Example: Flush draw has 9 outs (9 remaining cards of that suit)
+- Rule of 4 and 2: Multiply outs by 4 (flop) or 2 (turn) for rough equity %
+
+---
+
+## Common Draw Types
+
+### Flush Draw
+- 4 cards of same suit, need 1 more
+- **Outs**: 9 (13 of that suit - 4 already seen)
+- **Equity** (flop to river): ~35%
+
+### Open-Ended Straight Draw (OESD)
+- 4 consecutive cards, need either end
+- **Outs**: 8 (4 cards on each end)
+- **Equity** (flop to river): ~32%
+
+### Gutshot Straight Draw
+- 4 cards with one gap, need specific inside card
+- **Outs**: 4
+- **Equity** (flop to river): ~16%
+
+### Combo Draw
+- Multiple draws combined (e.g., flush + straight draw)
+- **Outs**: Sum of non-overlapping outs
+- Can have >50% equity vs made hands
+
+### Overcards
+- Hole cards higher than all board cards
+- **Outs**: 6 (assuming either card gives top pair)
+- **Equity**: Varies based on opponent's likely holdings
+
+---
+
+## Betting Concepts
+
+### Pot Size
+- Total chips currently in the middle
+- Includes all bets from current and previous streets
+
+### Stack Size
+- Chips a player currently has
+- **Deep stacked**: 100+ big blinds
+- **Medium stacked**: 30-100 big blinds
+- **Short stacked**: <30 big blinds
+
+### Bet Sizing
+- **Value bet**: Bet with a strong hand to get called by worse
+- **Bluff**: Bet with a weak hand to make better hands fold
+- **Semi-bluff**: Bet with a drawing hand (has equity if called)
+
+### Effective Stack
+- The smaller stack between two players
+- Maximum amount that can be won/lost in a hand
+
+---
+
+## Player Statistics (Observable Metrics)
+
+### VPIP (Voluntarily Put $ In Pot)
+- Percentage of hands where player voluntarily invests chips
+- Excludes mandatory blinds
+- **Tight**: <20%, **Normal**: 20-30%, **Loose**: >30%
+
+### PFR (Preflop Raise)
+- Percentage of hands where player raises preflop
+- **Tight**: <12%, **Normal**: 12-20%, **Aggressive**: >20%
+
+### AF (Aggression Factor)
+- Ratio of aggressive actions to passive actions
+- Formula: `(raises + bets) / calls`
+- **Passive**: <1.0, **Normal**: 1.0-2.0, **Aggressive**: >2.0
+
+### 3-Bet Percentage
+- How often a player re-raises a preflop raise
+- Indicates aggression and hand range
+
+### C-Bet (Continuation Bet)
+- Bet on flop after raising preflop
+- Shows aggression and commitment to hand
+
+### Fold to C-Bet
+- How often a player folds to continuation bet
+- **High** (>60%): Exploitable by bluffing
+- **Low** (<40%): Sticky, hard to bluff
+
+### Win Rate
+- Percentage of hands won
+- Can be misleading without context (hand selection bias)
+
+---
+
+## Player Type Classifications
+
+### TAG (Tight-Aggressive)
+- Plays few hands but plays them aggressively
+- Difficult to play against
+- Characteristics: Low VPIP, high PFR, high AF
+
+### LAG (Loose-Aggressive)
+- Plays many hands aggressively
+- Can be very strong or very exploitable
+- Characteristics: High VPIP, high PFR, high AF
+
+### Fish (Loose-Passive)
+- Plays too many hands passively
+- Calls too much, rarely raises
+- Characteristics: High VPIP, low PFR, low AF
+
+### Rock/Nit (Tight-Passive)
+- Plays very few hands and plays them passively
+- Only bets with very strong hands
+- Characteristics: Low VPIP, low PFR, low AF
+
+### Maniac
+- Plays almost every hand with maximum aggression
+- Unpredictable and high variance
+- Characteristics: Very high VPIP, very high PFR, very high AF
+
+---
+
+## Game Theory Concepts
+
+### GTO (Game Theory Optimal)
+- Strategy that cannot be exploited
+- Balanced approach that makes opponent indifferent
+- Uses mixed strategies (randomization)
+- May not maximize profit against weak opponents
+
+### Exploitative Play
+- Strategy that targets opponent weaknesses
+- Deviates from GTO to maximize profit
+- Requires accurate opponent modeling
+- Vulnerable to counter-exploitation
+
+### Nash Equilibrium
+- Strategy profile where no player can improve by changing strategy alone
+- Foundation of GTO poker
+- Difficult to compute for full game tree
+
+### Range
+- Set of all possible hands a player could have
+- Narrows based on actions and board texture
+- Key to advanced play
+
+### Polarized vs. Merged Range
+- **Polarized**: Contains strong hands and bluffs, few medium hands
+- **Merged**: Contains many medium-strength hands
+- Affects optimal bet sizing and frequency
+
+---
+
+## Board Texture
+
+### Dry Board
+- Few drawing possibilities
+- Example: K♠ 7♥ 2♣ (rainbow, no flush/straight draws)
+- Favors preflop aggressor
+
+### Wet Board
+- Many drawing possibilities
+- Example: T♠ 9♠ 8♥ (flush and straight draws)
+- Requires caution with marginal hands
+
+### Monotone Board
+- All cards same suit
+- Example: Q♠ 8♠ 3♠
+- Flush draws and made flushes likely
+
+### Paired Board
+- Two cards of same rank
+- Example: K♥ K♦ 5♣
+- Full houses possible, reduces hand values
+
+### Connected Board
+- Cards close in rank
+- Example: 8♥ 7♦ 6♠
+- Straight draws and made straights likely
+
+---
+
+## Mathematical Foundations
+
+### Chen Formula (Preflop Hand Strength)
+Approximate hand strength calculation:
+1. Highest card: 10 for Ace, 8 for King, ... , 0 for 2-5
+2. Pair: Double the value, minimum 5 points
+3. Suited: Add 2 points
+4. Gap penalty: Subtract 1-5 points based on gap between cards
+5. Normalize to 0.0-1.0 scale
+
+Example: AA = 20 points (10 × 2) → 1.0 strength
+
+### Combinatorics
+- Total possible hands: C(52, 2) = 1,326
+- Pocket pairs: 6 combinations each (78 total)
+- Suited hands: 4 combinations each
+- Offsuit hands: 12 combinations each
+
+### Hand Ranges
+- Represent hands as grid (13×13 matrix)
+- Rows/columns are card ranks
+- Diagonal = pocket pairs
+- Above diagonal = suited hands
+- Below diagonal = offsuit hands
+
+---
+
+## Information & Game State
+
+### Perfect Information
+- Community cards
+- Pot size
+- Player chip stacks
+- Player actions
+- Position
+
+### Hidden Information
+- Opponent hole cards
+- Opponent strategy
+- Opponent emotional state
+- Future community cards
+
+### Inferred Information
+- Hand ranges (from actions)
+- Player tendencies (from statistics)
+- Likely holdings (from betting patterns)
+
+---
+
+## Tournament vs. Cash Game Concepts
+
+### ICM (Independent Chip Model)
+- Converts chip stacks to tournament equity
+- Relevant for tournaments, not cash games
+- Affects calling ranges near bubble/final table
+
+### Blind Levels
+- Cash game: Fixed blinds
+- Tournament: Increasing blinds over time
+- Affects stack size strategy (M-ratio, etc.)
+
+### Bankroll Considerations
+- Cash game: Leave anytime
+- Tournament: Play until elimination or victory
+
+---
+
+## Key Formulas Reference
+
+### Pot Odds
+```
+pot_odds = amount_to_call / (pot_size + amount_to_call)
+```
+
+### Equity vs. Pot Odds Decision
+```
+if equity > pot_odds:
+    # Mathematically correct to call
+```
+
+### Expected Value
+```
+EV = (win_probability × amount_won) - (lose_probability × amount_lost)
+```
+
+### Aggression Factor
+```
+AF = (num_raises + num_bets) / num_calls
+```
+
+### VPIP
+```
+VPIP = (hands_voluntarily_entered / total_hands_played) × 100
+```
+
+### PFR
+```
+PFR = (hands_raised_preflop / total_hands_played) × 100
+```
+
+---
+
+## Common Poker Terminology
+
+| Term | Definition |
+|------|------------|
+| **Pot** | Total chips in play for current hand |
+| **Stack** | Player's remaining chips |
+| **Blinds** | Mandatory bets before cards dealt |
+| **Ante** | Small forced bet from all players (tournaments) |
+| **Showdown** | Final reveal of hands |
+| **Muck** | Fold without showing cards |
+| **Kicker** | Highest unpaired card (breaks ties) |
+| **Nuts** | Best possible hand given the board |
+| **Runner-runner** | Hitting on both turn and river |
+| **Bad beat** | Losing with a very strong hand |
+| **Cooler** | Unavoidable loss (both players have strong hands) |
+| **Variance** | Statistical fluctuation in results |
+
+---
+
+## Anti-Patterns: What NOT to Do
+
+### Don't Confuse Terminology
+- "Bet" vs. "Raise": First aggressive action is a bet, subsequent is a raise
+- "Set" vs. "Trips": Both are three of a kind, but different formation
+- "Street" vs. "Phase": Street refers to betting round
+
+### Don't Hardcode "Correct" Play
+- There is no universally correct action for any scenario
+- Context matters: opponents, stack sizes, position, etc.
+- The bot should LEARN what works, not be told
+
+### Don't Ignore Mathematics
+- Pot odds, equity, EV are fundamental
+- Hand evaluation should be based on combinations
+- Probability calculations must be accurate
+
+---
+
+## Summary for Developers
+
+When implementing poker logic:
+1. Use correct terminology (refer to this document)
+2. Model concepts explicitly (phases, positions, actions)
+3. Calculate mathematics accurately (odds, equity, EV)
+4. Track observable statistics (VPIP, PFR, AF, etc.)
+5. Represent hands consistently (string format: "As", "Kh")
+6. Don't hardcode strategy - keep it trainable
+7. Separate game mechanics from strategic decisions
+
+This document defines WHAT poker is, not HOW to play it optimally. Strategy discovery is the ML system's job.

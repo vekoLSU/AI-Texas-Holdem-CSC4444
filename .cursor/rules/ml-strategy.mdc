@@ -1,0 +1,732 @@
+---
+globs: ["*strategy*.py", "*train*.py", "*model*.py", "decision_engine.py"]
+alwaysApply: false
+---
+
+# ML & Trainable Strategy Architecture
+
+## Core Philosophy
+
+The poker bot must discover optimal strategies through machine learning, NOT through hardcoded rules. Every strategic decision should be:
+- **Parameterized**: Based on learned values, not hardcoded constants
+- **Observable**: Logged for analysis and training
+- **Testable**: Evaluable against diverse opponents
+- **Adaptable**: Capable of updating based on new data
+
+---
+
+## Strategy Interface Design
+
+### Abstract Strategy Interface
+
+All strategy implementations should conform to a common interface:
+
+```python
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional
+
+class StrategyInterface(ABC):
+    """Abstract base class for all poker strategies."""
+
+    @abstractmethod
+    def decide(
+        self,
+        game_state: Dict,
+        hand_strength: Dict,
+        opponent_profiles: Dict[str, Dict],
+        phase: str,
+        position: str,
+        pot_odds: float
+    ) -> Dict[str, any]:
+        """
+        Make a decision based on current game state.
+
+        Args:
+            game_state: Current game state (pot, players, bets, etc.)
+            hand_strength: Hand evaluation results
+            opponent_profiles: Statistics and profiles for each opponent
+            phase: Current game phase (PREFLOP, FLOP, TURN, RIVER)
+            position: Player's position (early, middle, late, button, etc.)
+            pot_odds: Current pot odds if facing a bet
+
+        Returns:
+            Dict containing:
+                - action (str): One of ["fold", "check", "call", "raise", "all_in"]
+                - amount (int): Bet/raise amount (0 for fold/check/call)
+                - confidence (float): Confidence in decision (0.0-1.0)
+                - reasoning (str): Human-readable explanation (for logging)
+        """
+        pass
+
+    @abstractmethod
+    def update(self, outcome: Dict) -> None:
+        """
+        Update strategy based on hand outcome.
+
+        Args:
+            outcome: Result information (won/lost, showdown, etc.)
+        """
+        pass
+
+    @abstractmethod
+    def save(self, filepath: str) -> None:
+        """Save strategy parameters to file."""
+        pass
+
+    @abstractmethod
+    def load(self, filepath: str) -> None:
+        """Load strategy parameters from file."""
+        pass
+```
+
+---
+
+## Strategy State Representation
+
+### State Features for ML
+
+When representing poker state for ML models, include:
+
+```python
+class StateFeatures:
+    """Features representing current poker state."""
+
+    # Hand features
+    hand_strength: float           # 0.0-1.0
+    hand_type: str                 # e.g., "pair", "flush_draw"
+    num_outs: int                  # Drawing outs
+    equity: float                  # Win probability estimate
+
+    # Game features
+    phase: str                     # PREFLOP, FLOP, TURN, RIVER
+    position: str                  # early, middle, late, button
+    num_active_players: int        # Players still in hand
+    pot_size: int                  # Current pot
+    stack_size: int                # Our remaining chips
+    effective_stack: int           # Smallest stack in play
+
+    # Action features
+    to_call: int                   # Amount to call
+    pot_odds: float                # Pot odds if facing bet
+    current_bet: int               # Current bet amount
+    min_raise: int                 # Minimum raise allowed
+    max_raise: int                 # Maximum raise allowed (our stack)
+
+    # Opponent features (per opponent)
+    opponent_vpip: List[float]     # Each opponent's VPIP
+    opponent_pfr: List[float]      # Each opponent's PFR
+    opponent_aggression: List[float]  # Each opponent's AF
+    opponent_stack: List[int]      # Each opponent's chips
+    opponent_position: List[str]   # Each opponent's position
+
+    # Historical features
+    hands_played: int              # Total hands this session
+    recent_win_rate: float         # Win rate over last N hands
+    table_image: str               # How opponents likely view us
+```
+
+### Normalization
+All numerical features should be normalized to common ranges:
+- Probabilities/rates: 0.0-1.0
+- Chip amounts: Normalize by pot size or big blind
+- Counts: Normalize by maximum expected value
+
+---
+
+## Action Space
+
+### Discrete Actions
+```python
+ACTIONS = ["fold", "check", "call", "raise", "all_in"]
+```
+
+### Continuous Parameters
+For "raise" action, need to determine bet size:
+- **Pot-relative**: Fraction of pot (e.g., 0.5, 0.75, 1.0, 2.0)
+- **Stack-relative**: Fraction of stack (e.g., 0.1, 0.25, 0.5, 1.0)
+- **Absolute**: Fixed amounts based on blind levels
+
+### Action Masking
+Not all actions are valid in every situation:
+```python
+def get_valid_actions(game_state: Dict) -> List[str]:
+    """Return list of valid actions in current state."""
+    valid = []
+
+    # Can always fold (except when can check for free)
+    if game_state["to_call"] > 0:
+        valid.append("fold")
+
+    # Can check if no bet to call
+    if game_state["to_call"] == 0:
+        valid.append("check")
+
+    # Can call if there's a bet and we have chips
+    if game_state["to_call"] > 0 and game_state["to_call"] <= game_state["our_stack"]:
+        valid.append("call")
+
+    # Can raise if we have chips beyond call amount
+    if game_state["our_stack"] > game_state["to_call"]:
+        valid.append("raise")
+
+    # Can always go all-in if we have chips
+    if game_state["our_stack"] > 0:
+        valid.append("all_in")
+
+    return valid
+```
+
+---
+
+## Training Approaches
+
+### 1. Supervised Learning from Expert Data
+- Collect hand histories from strong human players or GTO solvers
+- Train model to mimic expert decisions
+- **Pros**: Fast convergence, baseline competence
+- **Cons**: Limited by expert skill ceiling, no adaptation
+
+### 2. Reinforcement Learning
+- Agent learns through self-play or play against opponents
+- Receives rewards based on chip wins/losses
+- **Pros**: Can discover novel strategies, adapts to opponents
+- **Cons**: Requires many iterations, high variance
+
+#### Reward Function Design
+```python
+def calculate_reward(hand_result: Dict) -> float:
+    """
+    Calculate reward for reinforcement learning.
+
+    Simple: chips won/lost
+    Advanced: Normalize by pot size, account for EV, etc.
+    """
+    chips_won = hand_result["chips_won"]
+    chips_invested = hand_result["chips_invested"]
+
+    # Simple reward: net chips
+    reward = chips_won - chips_invested
+
+    # Normalize by pot size to make rewards comparable
+    normalized_reward = reward / hand_result["pot_size"]
+
+    return normalized_reward
+```
+
+#### Exploration vs. Exploitation
+```python
+class EpsilonGreedyStrategy:
+    """Strategy that explores with probability epsilon."""
+
+    def __init__(self, base_strategy, epsilon: float = 0.1):
+        self.base_strategy = base_strategy
+        self.epsilon = epsilon
+
+    def decide(self, game_state, ...):
+        if random.random() < self.epsilon:
+            # Explore: random valid action
+            return self._random_action(game_state)
+        else:
+            # Exploit: use learned strategy
+            return self.base_strategy.decide(game_state, ...)
+```
+
+### 3. Counterfactual Regret Minimization (CFR)
+- Game theory approach to find Nash equilibrium
+- Used in successful poker AIs (Pluribus, Libratus)
+- **Pros**: Provably converges to GTO
+- **Cons**: Computationally expensive, complex implementation
+
+### 4. Hybrid Approach
+- Start with supervised learning baseline
+- Refine with reinforcement learning
+- Use CFR for specific situations
+- **Pros**: Best of all worlds
+- **Cons**: Complex training pipeline
+
+---
+
+## Model Architectures
+
+### 1. Deep Neural Network
+```python
+class PokerDNN(nn.Module):
+    """Deep neural network for poker decision-making."""
+
+    def __init__(self, input_size, hidden_sizes, output_size):
+        super().__init__()
+        self.layers = nn.ModuleList()
+
+        # Input layer
+        self.layers.append(nn.Linear(input_size, hidden_sizes[0]))
+
+        # Hidden layers
+        for i in range(len(hidden_sizes) - 1):
+            self.layers.append(nn.Linear(hidden_sizes[i], hidden_sizes[i+1]))
+
+        # Output layers (one for action, one for bet size)
+        self.action_head = nn.Linear(hidden_sizes[-1], len(ACTIONS))
+        self.bet_size_head = nn.Linear(hidden_sizes[-1], 1)
+
+    def forward(self, state_features):
+        x = state_features
+        for layer in self.layers:
+            x = F.relu(layer(x))
+
+        action_logits = self.action_head(x)
+        bet_size = torch.sigmoid(self.bet_size_head(x))  # 0-1 range
+
+        return action_logits, bet_size
+```
+
+### 2. Recurrent Network (LSTM/GRU)
+For modeling hand history and sequential decisions:
+```python
+class PokerRNN(nn.Module):
+    """Recurrent network that considers action history."""
+
+    def __init__(self, input_size, hidden_size, num_layers):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.action_head = nn.Linear(hidden_size, len(ACTIONS))
+
+    def forward(self, sequence_of_states, hidden_state=None):
+        # sequence_of_states: (batch, seq_len, features)
+        lstm_out, hidden = self.lstm(sequence_of_states, hidden_state)
+
+        # Use last output for decision
+        action_logits = self.action_head(lstm_out[:, -1, :])
+
+        return action_logits, hidden
+```
+
+### 3. Transformer
+For attention over opponent actions and board cards:
+```python
+class PokerTransformer(nn.Module):
+    """Transformer model for poker with attention mechanism."""
+
+    def __init__(self, d_model, nhead, num_layers):
+        super().__init__()
+        self.transformer = nn.Transformer(d_model, nhead, num_layers)
+        # Additional heads for actions, bet sizing
+```
+
+---
+
+## Data Collection & Logging
+
+### Decision Logging Format
+```python
+decision_log = {
+    "timestamp": "2025-11-30T12:34:56",
+    "hand_id": "12345",
+
+    # State information
+    "phase": "FLOP",
+    "position": "button",
+    "hand_cards": ["As", "Kh"],
+    "community_cards": ["Qd", "Jc", "Tc"],
+    "hand_strength": 0.85,
+    "hand_type": "straight",
+
+    # Game state
+    "pot": 500,
+    "to_call": 100,
+    "our_stack": 2000,
+    "num_players": 3,
+
+    # Opponent data
+    "opponents": [
+        {"id": "player1", "stack": 1500, "vpip": 0.25, "pfr": 0.15},
+        {"id": "player2", "stack": 3000, "vpip": 0.40, "pfr": 0.30}
+    ],
+
+    # Decision
+    "action": "raise",
+    "amount": 300,
+    "confidence": 0.75,
+    "reasoning": "Strong hand, position advantage, exploit tight opponent",
+
+    # Outcome (filled in after hand completes)
+    "result": "won",
+    "chips_won": 800,
+    "opponent_showed": "Ah Qh"  # If went to showdown
+}
+```
+
+### Storage Format
+- **JSON Lines**: One JSON object per line for easy streaming
+- **CSV**: For tabular analysis
+- **Database**: For complex queries and analysis
+- **Parquet**: For efficient storage and fast reads
+
+---
+
+## Training Pipeline
+
+### 1. Data Collection Phase
+```python
+class DataCollector:
+    """Collect training data from bot play."""
+
+    def __init__(self, output_path):
+        self.output_path = output_path
+        self.buffer = []
+
+    def record_decision(self, decision_data):
+        self.buffer.append(decision_data)
+
+    def record_outcome(self, hand_id, outcome):
+        # Find corresponding decision and add outcome
+        for decision in self.buffer:
+            if decision["hand_id"] == hand_id:
+                decision.update(outcome)
+
+    def save_batch(self):
+        # Write buffer to disk
+        with open(self.output_path, 'a') as f:
+            for decision in self.buffer:
+                f.write(json.dumps(decision) + '\n')
+        self.buffer = []
+```
+
+### 2. Preprocessing Phase
+```python
+class DataPreprocessor:
+    """Prepare collected data for training."""
+
+    def load_data(self, filepath):
+        # Load decision logs
+        pass
+
+    def extract_features(self, decision_log):
+        # Convert decision log to feature vector
+        pass
+
+    def create_training_examples(self):
+        # Convert logs to (state, action, reward) tuples
+        pass
+
+    def split_train_val_test(self, train_ratio=0.8, val_ratio=0.1):
+        # Split data for training, validation, testing
+        pass
+```
+
+### 3. Training Phase
+```python
+class StrategyTrainer:
+    """Train poker strategy model."""
+
+    def __init__(self, model, optimizer, loss_fn):
+        self.model = model
+        self.optimizer = optimizer
+        self.loss_fn = loss_fn
+
+    def train_epoch(self, dataloader):
+        self.model.train()
+        total_loss = 0
+
+        for batch in dataloader:
+            states, actions, rewards = batch
+
+            # Forward pass
+            predicted_actions, predicted_values = self.model(states)
+
+            # Compute loss
+            loss = self.loss_fn(predicted_actions, actions, predicted_values, rewards)
+
+            # Backward pass
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            total_loss += loss.item()
+
+        return total_loss / len(dataloader)
+
+    def validate(self, val_dataloader):
+        self.model.eval()
+        # Compute validation metrics
+        pass
+```
+
+### 4. Evaluation Phase
+```python
+class StrategyEvaluator:
+    """Evaluate strategy performance."""
+
+    def evaluate_against_opponents(self, strategy, opponent_types, num_hands=10000):
+        """
+        Play strategy against different opponent types.
+
+        Returns:
+            Dict of metrics (win rate, avg chips won, etc.)
+        """
+        results = {}
+
+        for opponent_type in opponent_types:
+            win_rate, avg_profit = self._play_match(strategy, opponent_type, num_hands)
+            results[opponent_type] = {
+                "win_rate": win_rate,
+                "avg_profit": avg_profit
+            }
+
+        return results
+
+    def _play_match(self, strategy, opponent, num_hands):
+        # Simulate poker hands
+        pass
+```
+
+---
+
+## Parameter Management
+
+### Configuration Structure
+```python
+strategy_config = {
+    # Model architecture
+    "model_type": "dnn",  # or "rnn", "transformer"
+    "hidden_sizes": [256, 128, 64],
+    "dropout": 0.2,
+
+    # Training parameters
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "num_epochs": 100,
+    "optimizer": "adam",
+
+    # Strategy parameters (learned during training)
+    "preflop_raise_threshold": 0.75,  # Min hand strength to raise preflop
+    "bluff_frequency": 0.15,          # How often to bluff
+    "aggression_factor": 1.2,         # Overall aggression multiplier
+    "risk_tolerance": 0.5,            # Willingness to take risky plays
+
+    # Opponent adaptation
+    "exploit_weight": 0.3,            # Weight on exploitative adjustments
+    "gto_weight": 0.7,                # Weight on GTO baseline
+    "adaptation_rate": 0.1,           # How quickly to adapt to opponents
+
+    # Exploration
+    "epsilon": 0.1,                   # Exploration rate for epsilon-greedy
+    "temperature": 1.0,               # Softmax temperature for action selection
+}
+```
+
+### Loading/Saving Parameters
+```python
+class ConfigurableStrategy(StrategyInterface):
+    """Strategy that loads parameters from config."""
+
+    def __init__(self, config_path: Optional[str] = None):
+        if config_path:
+            self.load_config(config_path)
+        else:
+            self.config = self._default_config()
+
+    def load_config(self, config_path: str):
+        with open(config_path) as f:
+            self.config = json.load(f)
+
+    def save_config(self, config_path: str):
+        with open(config_path, 'w') as f:
+            json.dump(self.config, f, indent=2)
+
+    def _default_config(self):
+        return strategy_config  # From above
+```
+
+---
+
+## Opponent Modeling for ML
+
+### Predictive Opponent Modeling
+```python
+class OpponentModel:
+    """ML model to predict opponent actions."""
+
+    def train(self, opponent_history):
+        """
+        Train model on opponent's past actions.
+
+        Args:
+            opponent_history: List of (state, action) tuples for opponent
+        """
+        pass
+
+    def predict_action(self, game_state) -> Dict[str, float]:
+        """
+        Predict probability distribution over opponent's next action.
+
+        Returns:
+            Dict mapping actions to probabilities
+            e.g., {"fold": 0.2, "call": 0.6, "raise": 0.2}
+        """
+        pass
+
+    def predict_hand_range(self, action_sequence, board) -> Dict[str, float]:
+        """
+        Estimate probability distribution over opponent's possible hands.
+
+        Returns:
+            Dict mapping hand types to probabilities
+        """
+        pass
+```
+
+---
+
+## Online Learning & Adaptation
+
+### Continual Learning
+```python
+class AdaptiveStrategy:
+    """Strategy that updates during play."""
+
+    def __init__(self, base_model):
+        self.base_model = base_model
+        self.recent_buffer = []
+
+    def decide(self, game_state, ...):
+        # Use current model
+        return self.base_model.decide(game_state, ...)
+
+    def update(self, outcome):
+        # Add to buffer
+        self.recent_buffer.append(outcome)
+
+        # Periodically retrain on recent data
+        if len(self.recent_buffer) >= 100:
+            self._incremental_update()
+
+    def _incremental_update(self):
+        """Update model on recent hands without full retraining."""
+        # Fine-tune model on recent_buffer
+        # Use lower learning rate to avoid catastrophic forgetting
+        pass
+```
+
+### Multi-Armed Bandit for Strategy Selection
+```python
+class StrategySelector:
+    """Select between multiple strategies using bandit algorithm."""
+
+    def __init__(self, strategies: List[StrategyInterface]):
+        self.strategies = strategies
+        self.wins = [0] * len(strategies)
+        self.plays = [0] * len(strategies)
+
+    def select_strategy(self) -> StrategyInterface:
+        """Select strategy using UCB1 algorithm."""
+        total_plays = sum(self.plays)
+
+        if total_plays < len(self.strategies):
+            # Play each strategy at least once
+            return self.strategies[total_plays]
+
+        # UCB1: balance exploitation and exploration
+        ucb_scores = [
+            self.wins[i] / self.plays[i] + math.sqrt(2 * math.log(total_plays) / self.plays[i])
+            for i in range(len(self.strategies))
+        ]
+
+        return self.strategies[ucb_scores.index(max(ucb_scores))]
+
+    def update_strategy_result(self, strategy_idx: int, won: bool):
+        self.plays[strategy_idx] += 1
+        if won:
+            self.wins[strategy_idx] += 1
+```
+
+---
+
+## Evaluation Metrics
+
+### Performance Metrics
+- **Win Rate**: Percentage of hands won
+- **BB/100**: Big blinds won per 100 hands (standard poker metric)
+- **ROI**: Return on investment (tournament)
+- **Sharpe Ratio**: Risk-adjusted return
+
+### Decision Quality Metrics
+- **EV Accuracy**: How close decisions are to optimal EV
+- **Bluff Success Rate**: Percentage of bluffs that succeed
+- **Value Bet Efficiency**: Average profit from value bets
+- **Fold Equity Realization**: How often opponents fold when we bet
+
+### Opponent Exploitation Metrics
+- **Exploitation Score**: Profit vs. exploitable opponents compared to GTO baseline
+- **Adaptation Speed**: How quickly bot adjusts to new opponent tendencies
+- **Counter-Exploitation Resistance**: How well bot performs when opponents adjust
+
+---
+
+## Best Practices
+
+### Do's
+✓ Log every decision with full context
+✓ Normalize all features to comparable ranges
+✓ Use action masking to prevent invalid actions
+✓ Separate model architecture from strategy parameters
+✓ Version control your models and configs
+✓ Evaluate against diverse opponent types
+✓ Use separate train/validation/test sets
+✓ Track multiple metrics (not just win rate)
+✓ Enable easy strategy swapping (dependency injection)
+✓ Make all strategic parameters configurable
+
+### Don'ts
+✗ Don't hardcode thresholds or action frequencies
+✗ Don't train only against one opponent type
+✗ Don't ignore invalid action masking
+✗ Don't overfit to training data
+✗ Don't use hand results as sole training signal (variance)
+✗ Don't forget to normalize rewards
+✗ Don't mix game mechanics with ML logic
+✗ Don't skip logging (needed for debugging and improvement)
+
+---
+
+## Integration with Existing Code
+
+### Current `decision_engine.py` Refactoring
+The existing decision engine contains hardcoded strategies. Refactor as follows:
+
+1. **Extract current logic** into `HardcodedStrategy` class
+2. **Create `StrategyInterface`** abstract base class
+3. **Implement `LearnedStrategy`** class that loads ML model
+4. **Update `PokerBot`** to accept strategy via dependency injection
+5. **Add logging** to all decision points
+
+```python
+# Before (in bot.py)
+self.decision_engine = DecisionEngine()
+
+# After (in bot.py)
+strategy = LearnedStrategy(model_path="models/trained_model.pkl")
+self.decision_engine = DecisionEngine(strategy=strategy)
+
+# Or for testing old approach
+strategy = HardcodedStrategy()
+self.decision_engine = DecisionEngine(strategy=strategy)
+```
+
+---
+
+## Summary
+
+The goal is a **trainable, adaptable poker AI** that:
+1. Learns optimal strategies from data
+2. Adapts to different opponent types
+3. Continuously improves through play
+4. Maintains clean separation between game mechanics and strategic logic
+5. Enables easy experimentation with different ML approaches
+
+All strategic decisions should be **learned, not hardcoded**. The architecture should make it easy to:
+- Swap between different models/strategies
+- Collect training data
+- Evaluate performance
+- Iterate and improve
+
+Remember: The code defines the framework for learning, not the strategy itself.

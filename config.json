@@ -1,0 +1,22 @@
+{
+    "apiKey": "dev",
+    "tableName": "table-1",
+    "playerName": "bot1",
+    "serverUrl": "ws://localhost:8080",
+    
+    "strategy": {
+        "aggressionFactor": 1.2,
+        "bluffFrequency": 0.15,
+        "tightness": "balanced"
+    },
+    
+    "comments": {
+        "apiKey": "Authentication key for the poker server",
+        "tableName": "Table identifier to join",
+        "playerName": "Your bot's display name",
+        "serverUrl": "WebSocket server address",
+        "aggressionFactor": "1.0 = normal, >1.0 = more aggressive, <1.0 = more passive",
+        "bluffFrequency": "0.15 = bluff 15% of the time when appropriate",
+        "tightness": "balanced | tight | loose"
+    }
+}

@@ -1,0 +1,6 @@
+{
+  "total_hands": 500000,
+  "win_rate": 16.0548,
+  "training_time_hours": 0.44327714211410946,
+  "final_model": "trained_models\\agent_final.pt"
+}

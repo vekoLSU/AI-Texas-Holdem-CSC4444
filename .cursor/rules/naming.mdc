@@ -1,0 +1,526 @@
+---
+globs: ["*.py"]
+alwaysApply: false
+---
+
+# Naming Conventions & Code Style
+
+## Python Naming Standards
+
+### Classes
+- **Format**: PascalCase
+- **Examples**: `PokerBot`, `HandEvaluator`, `DecisionEngine`, `OpponentTracker`
+- **Pattern**: Noun or noun phrase describing the entity
+- **Avoid**: Abbreviations unless universally understood (e.g., `MLStrategy` is OK, `HE` is not)
+
+```python
+# Good
+class StrategyInterface:
+class LearnedStrategy:
+class GTOStrategy:
+
+# Bad
+class strategy_interface:  # Wrong case
+class SI:                  # Too abbreviated
+class TheStrategyThing:    # Vague
+```
+
+---
+
+### Methods & Functions
+- **Format**: snake_case
+- **Examples**: `evaluate_hand_strength()`, `decide_postflop()`, `get_opponent_profiles()`
+- **Pattern**: Verb phrase describing the action
+
+#### Method Name Prefixes
+
+| Prefix | Purpose | Example | Returns |
+|--------|---------|---------|---------|
+| `get_*` | Retrieve existing value | `get_position()` | Value |
+| `calculate_*` | Perform computation | `calculate_pot_odds()` | Computed value |
+| `evaluate_*` | Assess/judge something | `evaluate_hand_strength()` | Assessment |
+| `find_*` | Search for something | `find_our_player()` | Optional result |
+| `is_*` | Boolean check | `is_flush()`, `is_our_turn()` | Boolean |
+| `has_*` | Existence check | `has_straight_draw()` | Boolean |
+| `handle_*` | Event/message handler | `handle_message()` | None/Action |
+| `record_*` | Log/track data | `record_action()` | None |
+| `update_*` | Modify state | `update_statistics()` | None |
+| `create_*` | Factory method | `create_strategy()` | New instance |
+| `load_*` | Load from file/db | `load_strategy_params()` | Loaded data |
+| `save_*` | Save to file/db | `save_hand_history()` | None/Success |
+| `train_*` | ML training | `train_model()` | Model/Metrics |
+| `predict_*` | ML inference | `predict_action()` | Prediction |
+
+```python
+# Good
+def calculate_aggression_factor(self, player_stats: Dict) -> float:
+def is_flush(self, cards: List[str]) -> bool:
+def record_hand_result(self, winner: str, pot: int) -> None:
+
+# Bad
+def aggressionFactor(self):           # Wrong case
+def calc_aggr(self):                  # Too abbreviated
+def get_flush_status(self):           # Should be is_flush()
+def do_calculation(self):             # Vague verb
+```
+
+---
+
+### Variables
+- **Format**: snake_case
+- **Examples**: `hand_strength`, `opponent_profiles`, `current_bet`, `to_call`
+- **Pattern**: Descriptive noun or noun phrase
+
+#### Variable Naming Patterns
+
+| Type | Pattern | Examples |
+|------|---------|----------|
+| Booleans | `is_*`, `has_*`, `can_*`, `should_*` | `is_aggressive`, `has_pair`, `can_raise`, `should_fold` |
+| Counts | `num_*`, `*_count` | `num_outs`, `player_count` |
+| Totals | `total_*` | `total_bets`, `total_pot` |
+| Lists | Plural nouns | `players`, `cards`, `actions` |
+| Dicts | `*_map`, `*_by_*` | `player_map`, `stats_by_player` |
+| Factors/Multipliers | `*_factor`, `*_multiplier` | `aggression_factor`, `position_multiplier` |
+| Rates/Frequencies | `*_rate`, `*_frequency` | `win_rate`, `bluff_frequency` |
+| Ranges | `min_*`, `max_*` | `min_bet`, `max_raise` |
+| Thresholds | `*_threshold`, `*_limit` | `fold_threshold`, `bet_limit` |
+
+```python
+# Good
+is_our_turn = True
+num_players = 6
+total_pot = 1500
+hand_cards = ["As", "Kh"]
+player_stats = {...}
+aggression_factor = 1.2
+win_rate = 0.65
+max_raise = 5000
+
+# Bad
+turn = True                    # Ambiguous
+players = 6                    # Should be num_players or player_count
+pot = 1500                     # OK, but total_pot is clearer
+cards = ["As", "Kh"]          # Too generic (hand_cards is better)
+stats = {...}                  # Too vague
+factor = 1.2                   # What kind of factor?
+```
+
+---
+
+### Constants
+- **Format**: UPPER_SNAKE_CASE
+- **Examples**: `CARD_VALUES`, `HAND_RANKS`, `PREFLOP_STRENGTH`, `DEFAULT_STACK_SIZE`
+- **Usage**: Module-level immutable values, configuration defaults
+
+```python
+# Good
+CARD_VALUES = {"2": 2, "3": 3, ..., "A": 14}
+HAND_RANKS = {
+    "royal_flush": 10,
+    "straight_flush": 9,
+    ...
+}
+MAX_PLAYERS = 9
+DEFAULT_BIG_BLIND = 100
+
+# Bad
+cardValues = {...}             # Wrong case
+HandRanks = {...}              # Wrong case (this is a constant, not a class)
+max_players = 9                # Should be uppercase for constants
+```
+
+---
+
+### Private Methods & Attributes
+- **Format**: Leading underscore `_private_name`
+- **Usage**: Internal implementation details not part of public API
+
+```python
+class PokerBot:
+    def __init__(self):
+        self.player_id = "bot1"      # Public
+        self._last_action = None     # Private
+
+    def make_decision(self):         # Public
+        return self._apply_strategy()
+
+    def _apply_strategy(self):       # Private implementation detail
+        pass
+```
+
+---
+
+### Type Hints
+- **Required**: All public method signatures
+- **Recommended**: Private methods and complex variables
+- **Format**: Standard Python typing module
+
+```python
+from typing import List, Dict, Optional, Tuple, Union
+
+# Good
+def evaluate_hand_strength(
+    self,
+    hand_cards: List[str],
+    community_cards: List[str],
+    phase: str
+) -> Dict[str, Union[float, str]]:
+    pass
+
+def find_our_player(self, players: List[Dict]) -> Optional[Dict]:
+    pass
+
+# Acceptable for simple cases
+def get_player_count(self) -> int:
+    return len(self.players)
+
+# Bad (no type hints on public method)
+def evaluate_hand_strength(self, hand_cards, community_cards, phase):
+    pass
+```
+
+---
+
+## Poker-Specific Naming
+
+### Game Phases
+Use standard poker terminology:
+```python
+# Good
+phase = "PREFLOP"
+phase = "FLOP"
+phase = "TURN"
+phase = "RIVER"
+phase = "SHOWDOWN"
+
+# Bad
+phase = "before_flop"
+phase = "first_round"
+phase = "4th_street"  # Old terminology
+```
+
+### Actions
+```python
+# Good
+action = "fold"
+action = "check"
+action = "call"
+action = "raise"
+action = "all_in"
+
+# Bad
+action = "FOLD"       # Should be lowercase
+action = "bet"        # Use "raise" instead
+action = "allin"      # Use "all_in" with underscore
+```
+
+### Positions
+```python
+# Good
+position = "early"
+position = "middle"
+position = "late"
+position = "button"
+position = "small_blind"
+position = "big_blind"
+position = "heads_up"
+
+# Bad
+position = "EP"       # Don't abbreviate
+position = "cutoff"   # Use "late" for consistency
+position = "SB"       # Use "small_blind"
+```
+
+### Hand Types
+```python
+# Good
+hand_type = "royal_flush"
+hand_type = "straight_flush"
+hand_type = "four_of_kind"
+hand_type = "full_house"
+hand_type = "flush"
+hand_type = "straight"
+hand_type = "three_of_kind"
+hand_type = "two_pair"
+hand_type = "pair"
+hand_type = "high_card"
+
+# Bad
+hand_type = "quads"          # Use "four_of_kind"
+hand_type = "boat"           # Use "full_house"
+hand_type = "trips"          # Use "three_of_kind"
+hand_type = "set"            # Use "three_of_kind"
+```
+
+### Card Representation
+```python
+# Good - String format: rank + suit
+card = "As"  # Ace of spades
+card = "Kh"  # King of hearts
+card = "Tc"  # Ten of clubs
+card = "2d"  # Two of diamonds
+
+# Ranks: 2-9, T (ten), J, Q, K, A
+# Suits: s (spades), h (hearts), c (clubs), d (diamonds)
+
+# Bad
+card = "ace_spades"
+card = "AceSpades"
+card = {"rank": "A", "suit": "s"}  # Use string format for simplicity
+```
+
+---
+
+## File Naming
+
+### Python Modules
+- **Format**: snake_case
+- **Pattern**: Descriptive noun or noun phrase
+- **Examples**: `bot.py`, `hand_evaluator.py`, `decision_engine.py`, `opponent_tracker.py`
+
+```
+# Good
+bot.py
+hand_evaluator.py
+decision_engine.py
+strategy_trainer.py
+ml_strategy.py
+
+# Bad
+Bot.py                    # Wrong case
+handEvaluator.py          # Wrong case
+de.py                     # Too abbreviated
+poker_bot_main.py         # Redundant (just bot.py)
+```
+
+### Configuration Files
+```
+# Good
+config.json
+strategy_params.json
+game_config.yaml
+
+# Bad
+CONFIG.json
+config.JSON
+strategy-params.json      # Use underscores, not hyphens
+```
+
+### Data Files
+```
+# Good
+hand_history.csv
+training_data.pkl
+opponent_profiles.json
+
+# Bad
+HandHistory.csv
+data.pkl                  # Too generic
+opponent-profiles.json    # Use underscores
+```
+
+---
+
+## Dictionary Keys
+
+### Consistent Key Naming
+Use snake_case for consistency with Python variables:
+
+```python
+# Good
+player = {
+    "player_id": "bot1",
+    "chip_count": 5000,
+    "is_active": True,
+    "position": "button",
+    "hole_cards": ["As", "Kh"]
+}
+
+action = {
+    "action": "raise",
+    "amount": 300,
+    "confidence": 0.85
+}
+
+# Bad (mixing camelCase and snake_case)
+player = {
+    "playerId": "bot1",      # camelCase
+    "chip_count": 5000,      # snake_case
+    "isActive": True,        # camelCase
+}
+```
+
+---
+
+## Comments & Docstrings
+
+### Inline Comments
+- Explain **why**, not **what**
+- Use for complex logic or non-obvious decisions
+- Keep under 80 characters per line
+
+```python
+# Good
+# Adjust for tight tables: increase aggression when opponents fold frequently
+aggression_factor *= 1.2
+
+# Bad
+# Set aggression factor to 1.2  (What the code already shows)
+aggression_factor = 1.2
+```
+
+### Docstrings
+Use for public methods, classes, and modules:
+
+```python
+def evaluate_hand_strength(
+    self,
+    hand_cards: List[str],
+    community_cards: List[str],
+    phase: str
+) -> Dict[str, Union[float, str]]:
+    """
+    Evaluate the strength of a poker hand.
+
+    Args:
+        hand_cards: Player's hole cards (e.g., ["As", "Kh"])
+        community_cards: Board cards (e.g., ["Qd", "Jc", "Tc"])
+        phase: Current game phase ("PREFLOP", "FLOP", "TURN", "RIVER")
+
+    Returns:
+        Dictionary containing:
+            - strength (float): Normalized hand strength (0.0-1.0)
+            - hand_type (str): Type of hand (e.g., "flush", "pair")
+            - confidence (float): Confidence in evaluation (0.0-1.0)
+
+    Raises:
+        ValueError: If cards are invalid or phase is unknown
+    """
+    pass
+```
+
+---
+
+## Code Organization Within Files
+
+### Import Order
+1. Standard library imports
+2. Third-party imports
+3. Local application imports
+
+```python
+# Good
+import asyncio
+import json
+from typing import List, Dict, Optional
+
+import websockets
+
+from hand_evaluator import HandEvaluator
+from decision_engine import DecisionEngine
+
+# Bad (mixed order)
+import websockets
+from hand_evaluator import HandEvaluator
+import asyncio
+```
+
+### Class Structure Order
+1. Class docstring
+2. Class-level constants
+3. `__init__` method
+4. Public methods
+5. Private methods
+
+```python
+class PokerBot:
+    """Main poker bot orchestrator."""
+
+    # Class constants
+    DEFAULT_STACK = 5000
+
+    def __init__(self, ...):
+        """Initialize the bot."""
+        pass
+
+    # Public methods
+    async def connect_and_play(self):
+        pass
+
+    def make_decision(self):
+        pass
+
+    # Private methods
+    def _apply_strategy(self):
+        pass
+```
+
+---
+
+## Anti-Patterns to Avoid
+
+### Vague Names
+```python
+# Bad
+data = {...}
+temp = calculate()
+result = process()
+x = 5
+
+# Good
+opponent_profile = {...}
+pot_odds = calculate_pot_odds()
+selected_action = select_action()
+num_outs = 5
+```
+
+### Overly Long Names
+```python
+# Bad
+player_total_accumulated_chip_count_including_current_bet = 5000
+
+# Good
+player_chips = 5000
+```
+
+### Hungarian Notation
+```python
+# Bad (don't use type prefixes in Python)
+str_player_name = "bot1"
+int_chip_count = 5000
+dict_player_stats = {...}
+
+# Good (use type hints instead)
+player_name: str = "bot1"
+chip_count: int = 5000
+player_stats: Dict = {...}
+```
+
+### Inconsistent Naming
+```python
+# Bad (mixing styles)
+playerCount = 6
+num_hands = 100
+TotalChips = 5000
+
+# Good (consistent snake_case)
+player_count = 6
+num_hands = 100
+total_chips = 5000
+```
+
+---
+
+## Summary Checklist
+
+When naming code elements:
+- [ ] Use PascalCase for classes
+- [ ] Use snake_case for functions, methods, and variables
+- [ ] Use UPPER_SNAKE_CASE for constants
+- [ ] Add type hints to all public methods
+- [ ] Use descriptive verb phrases for methods
+- [ ] Use descriptive noun phrases for variables
+- [ ] Prefix booleans with `is_`, `has_`, `can_`, `should_`
+- [ ] Use proper poker terminology
+- [ ] Keep names concise but clear
+- [ ] Be consistent across the codebase

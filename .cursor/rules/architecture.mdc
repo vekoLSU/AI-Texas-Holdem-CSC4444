@@ -1,0 +1,389 @@
+---
+globs: ["*.py"]
+alwaysApply: false
+---
+
+# Architecture & Module Boundaries
+
+## Module Responsibilities
+
+### bot.py - Game Orchestrator
+**Purpose**: Coordinate game state and facilitate communication
+
+**Responsibilities**:
+- WebSocket connection management
+- Message routing and parsing
+- Game state tracking (cards, pot, players, phase)
+- Coordinate between modules (hand evaluation, decision engine, opponent tracking)
+- Statistics aggregation
+
+**MUST NOT**:
+- Make strategic decisions
+- Hardcode poker strategy
+- Evaluate hands directly
+- Profile opponents directly
+
+**Dependencies**: `hand_evaluator`, `decision_engine`, `opponent_tracker`, `websockets`
+
+---
+
+### hand_evaluator.py - Pure Hand Evaluation
+**Purpose**: Mathematical hand strength calculation
+
+**Responsibilities**:
+- Calculate hand strength (0.0-1.0 scale) based on cards
+- Classify hand types (pair, flush, straight, etc.)
+- Evaluate draw potential and outs
+- Provide win probabilities (if implemented)
+
+**MUST BE**:
+- Pure functions with no side effects
+- Deterministic for same inputs
+- Fast and optimized (called frequently)
+- Independent of strategic considerations
+
+**MUST NOT**:
+- Make betting decisions
+- Consider opponent behavior
+- Apply strategic adjustments
+- Hardcode "playability" thresholds
+
+**Dependencies**: `itertools`, `collections`, `typing`
+
+---
+
+### decision_engine.py - Trainable Strategy Interface
+**Purpose**: Action selection based on trainable parameters
+
+**Current State**: Contains hardcoded strategies (needs refactoring)
+
+**Target Architecture**:
+- Accept strategy parameters from external source (config, ML model, etc.)
+- Provide clear interface for action selection
+- Log all decisions for training/analysis
+- Support multiple strategy profiles (GTO, exploitative, etc.)
+
+**Responsibilities**:
+- Translate hand strength + game state → action + bet size
+- Apply configurable strategy parameters
+- Support strategy switching/loading
+- Enable A/B testing of different approaches
+
+**MUST BE**:
+- Parameterized (no magic numbers)
+- Observable (log all decisions and reasoning)
+- Testable (easy to evaluate different parameter sets)
+- Flexible (support ML-driven decisions)
+
+**MUST NOT**:
+- Hardcode "always do X" logic
+- Make assumptions about "correct" play
+- Ignore opponent modeling data
+- Be tightly coupled to specific strategy implementations
+
+**Dependencies**: `typing`, `logging`, `math` (for calculations only)
+
+---
+
+### opponent_tracker.py - Player Profiling
+**Purpose**: Track opponent statistics and behavioral patterns
+
+**Responsibilities**:
+- Collect per-player statistics (VPIP, PFR, aggression, etc.)
+- Track action frequencies by phase and position
+- Maintain hand history per opponent
+- Provide opponent profiles for decision engine
+
+**MUST BE**:
+- Stateful (maintains history across hands)
+- Comprehensive (track all observable actions)
+- Efficient (use defaultdict, avoid memory leaks)
+- Observable (expose statistics for analysis)
+
+**MUST NOT**:
+- Make strategic decisions
+- Recommend specific actions
+- Hardcode exploitation strategies
+
+**Dependencies**: `typing`, `collections`
+
+---
+
+### competition_adapter.py - Protocol Translation
+**Purpose**: Bridge between bot and competition server protocols
+
+**Responsibilities**:
+- Translate server messages to bot format
+- Translate bot actions to server format
+- Handle protocol versioning if needed
+- Enable testing with different server implementations
+
+**MUST BE**:
+- Protocol-agnostic on bot side
+- Stateless (translation only)
+- Well-tested (protocol bugs are hard to debug)
+
+**MUST NOT**:
+- Modify game state
+- Make strategic decisions
+- Add latency to communication
+
+**Dependencies**: `bot`, `websockets`, `asyncio`, `json`
+
+---
+
+### test_server.py - Development Testing
+**Purpose**: Simulate poker games for local development
+
+**Responsibilities**:
+- Simulate realistic game scenarios
+- Provide diverse opponent behaviors
+- Enable rapid iteration without external server
+- Generate test data for training
+
+**Future Enhancement**:
+- Support multiple opponent profiles (tight, loose, aggressive, passive)
+- Record game logs for analysis
+- Simulate tournament structures
+- Enable deterministic testing (seeded random)
+
+---
+
+## Design Patterns
+
+### 1. Strategy Pattern
+Decision engine should support pluggable strategies:
+
+```python
+class StrategyInterface:
+    def decide(self, game_state, hand_strength, opponent_profiles) -> Action:
+        """Return action based on current state"""
+        pass
+
+# Different implementations
+class LearnedStrategy(StrategyInterface): ...
+class GTOStrategy(StrategyInterface): ...
+class ExploitativeStrategy(StrategyInterface): ...
+```
+
+### 2. Dependency Injection
+Pass dependencies to constructors, don't instantiate internally:
+
+```python
+# Good
+class PokerBot:
+    def __init__(self, hand_evaluator, decision_engine, opponent_tracker):
+        self.hand_evaluator = hand_evaluator
+        self.decision_engine = decision_engine
+        self.opponent_tracker = opponent_tracker
+
+# Bad
+class PokerBot:
+    def __init__(self):
+        self.hand_evaluator = HandEvaluator()  # Hard to test/swap
+```
+
+### 3. Observer Pattern
+Log all decisions for training and analysis:
+
+```python
+class DecisionLogger:
+    def log_decision(self, state, action, reasoning):
+        # Record for training pipeline
+        pass
+```
+
+### 4. Protocol Adapter Pattern
+Keep bot logic independent of server protocol:
+
+```
+Server Protocol ↔ Adapter ↔ Bot Internal Format
+```
+
+---
+
+## Data Flow
+
+### Incoming Message Flow
+```
+WebSocket Message
+    ↓
+bot.handle_message()
+    ↓
+Parse & Update Game State
+    ↓
+opponent_tracker.observe_state()
+    ↓
+[If our turn]
+    ↓
+hand_evaluator.evaluate_hand_strength()
+    ↓
+opponent_tracker.get_opponent_profiles()
+    ↓
+decision_engine.decide()
+    ↓
+Format & Send Action
+    ↓
+WebSocket Response
+```
+
+### Decision Flow (Target Architecture)
+```
+Game State + Cards
+    ↓
+Hand Evaluation (pure math)
+    ↓
+Opponent Profiling (statistics)
+    ↓
+Strategy Application (trainable parameters)
+    ↓
+Action Selection (configurable logic)
+    ↓
+Bet Sizing (parameterized)
+    ↓
+Action + Amount
+```
+
+---
+
+## Module Coupling
+
+### Allowed Dependencies
+- `bot.py` → `hand_evaluator`, `decision_engine`, `opponent_tracker`
+- `decision_engine.py` → `hand_evaluator` (for strength queries only)
+- `competition_adapter.py` → `bot.py`
+- `test_server.py` → (no dependencies, standalone)
+
+### Forbidden Dependencies
+- `hand_evaluator.py` → ANY other module (keep pure)
+- `decision_engine.py` → `bot.py` (reverse dependency)
+- `opponent_tracker.py` → `decision_engine.py` (separation of concerns)
+
+---
+
+## Configuration Architecture
+
+### Current State
+- Command-line arguments
+- Hardcoded parameters in modules
+- `config.json` exists but unused
+
+### Target State
+```
+config/
+├── game_config.json          # Server URLs, API keys, etc.
+├── strategy_params.json      # Trainable strategy parameters
+├── evaluation_config.json    # Hand evaluation settings
+└── models/
+    └── learned_strategy.pkl  # Trained ML model
+```
+
+### Strategy Parameters Example
+```json
+{
+  "strategy_type": "learned",
+  "model_path": "models/learned_strategy.pkl",
+  "fallback_strategy": "conservative",
+  "exploration_rate": 0.1,
+  "risk_tolerance": 0.5,
+  "opponent_exploitation_weight": 0.3
+}
+```
+
+**Key Principle**: All strategic parameters should be externally configurable, not hardcoded.
+
+---
+
+## Refactoring Guidelines
+
+### When Moving to ML-Based Strategy
+
+1. **Extract Current Logic**: Move hardcoded strategy to separate strategy class
+2. **Define Interface**: Create `StrategyInterface` with clean `decide()` method
+3. **Parameterize**: Replace magic numbers with named parameters
+4. **Add Logging**: Record all decisions with full context
+5. **Enable Loading**: Support loading strategy from file/model
+6. **Test Both**: Ensure both old and new strategies work via same interface
+
+### When Adding Opponent Modeling
+
+1. **Expand Statistics**: Add new tracked metrics to `opponent_tracker`
+2. **Keep Descriptive**: Don't make strategic interpretations
+3. **Provide Context**: Pass full opponent profiles to decision engine
+4. **Let Strategy Decide**: Decision engine interprets opponent data
+
+### When Optimizing Performance
+
+1. **Profile First**: Identify actual bottlenecks
+2. **Optimize Pure Functions**: `hand_evaluator` is a good target
+3. **Cache Strategically**: Memoize expensive calculations
+4. **Keep Async**: Never block the event loop
+5. **Batch When Possible**: Process multiple hands efficiently in training
+
+---
+
+## Testing Architecture
+
+### Unit Tests
+- `hand_evaluator`: Test all hand types, edge cases
+- `opponent_tracker`: Verify statistics calculations
+- `decision_engine`: Test strategy interface compliance
+
+### Integration Tests
+- Use `test_server.py` to simulate full games
+- Verify message flow end-to-end
+- Test against known scenarios
+
+### Strategy Evaluation
+- A/B test different strategies
+- Measure win rate across opponent types
+- Track bankroll growth over time
+- Analyze decision quality (not just results)
+
+---
+
+## Future Architecture Considerations
+
+### Multi-Table Support
+```python
+class TournamentBot:
+    def __init__(self):
+        self.tables = {}  # table_id -> PokerBot instance
+```
+
+### Advanced Opponent Modeling
+```python
+class OpponentModel:
+    def predict_action(self, game_state) -> ActionProbabilities:
+        """ML model to predict opponent's next action"""
+        pass
+```
+
+### Strategy Evolution
+```python
+class StrategyTrainer:
+    def train(self, hand_history, opponent_types):
+        """Learn optimal strategy from game data"""
+        pass
+```
+
+### Hand Range Analysis
+```python
+class RangeAnalyzer:
+    def estimate_opponent_range(self, actions, board) -> HandRange:
+        """Deduce possible holdings from actions"""
+        pass
+```
+
+---
+
+## Summary
+
+The architecture should support:
+- **Flexibility**: Easy to swap strategies and models
+- **Observability**: Log everything for training
+- **Testability**: Clear interfaces, dependency injection
+- **Scalability**: Efficient for both play and training
+- **Maintainability**: Clean boundaries, single responsibilities
+
+Remember: The goal is a learnable system, not a hardcoded solution.

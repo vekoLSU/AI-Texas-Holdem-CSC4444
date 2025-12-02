@@ -1,0 +1,7 @@
+{
+  "total_hands": 500000,
+  "win_rate": 55.4482,
+  "training_time_hours": 0.6464661000834571,
+  "model_path": "trained_models_suited\\agent_suited_final.pt",
+  "suit_aware": true
+}
