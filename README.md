@@ -1,4 +1,4 @@
-# 🃏 Texas Hold'em Poker Bot
+# Texas Hold'em Poker Bot
 
 An AI poker bot for Texas Hold'em tournaments. It uses advanced decision-making, hand evaluation, and opponent modeling.
 
