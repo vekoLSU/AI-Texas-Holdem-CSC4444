@@ -5,7 +5,7 @@ Translates between the engine's protocol and the bot's expected format
 import asyncio
 import json
 import websockets
-from poker_bot.core.bot import PokerBot
+from poker_bot.core.bot import PlayerClient
 
 class CompetitionAdapter:
     """Adapts bot to work with the competition engine"""

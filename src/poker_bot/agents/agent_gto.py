@@ -122,8 +122,8 @@ class GTOAgent(StrategyInterface):
                     raise_amount = pot * 0.5 + 15
                     return {"action": "raise", "amount": min(int(raise_amount), our_chips)}
                 else:
-                    # Check from early position
-                    return {"action": "check"}
+                    # Call (check) from early position
+                    return {"action": "call"}
             elif pot_odds < 0.25:  # Good odds
                 return {"action": "call"}
             else:
@@ -137,7 +137,7 @@ class GTOAgent(StrategyInterface):
                     raise_amount = pot * 0.5
                     return {"action": "raise", "amount": min(int(raise_amount), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             elif pot_odds < 0.15 and num_players >= 3:
                 # Call with implied odds in multiway pots
                 return {"action": "call"}
@@ -152,7 +152,7 @@ class GTOAgent(StrategyInterface):
                     raise_amount = pot * 0.6
                     return {"action": "raise", "amount": min(int(raise_amount), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             else:
                 # Fold weak hands
                 return {"action": "fold"}
@@ -196,12 +196,12 @@ class GTOAgent(StrategyInterface):
         # Medium hands (middle pair, weak top pair)
         elif strength >= 0.40:
             if to_call == 0:
-                # Small bet or check
+                # Small bet or call
                 if num_players <= 2:
                     bet_size = pot * 0.4
                     return {"action": "raise", "amount": min(int(bet_size), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             elif pot_odds < 0.25:  # Good price
                 return {"action": "call"}
             else:
@@ -216,7 +216,7 @@ class GTOAgent(StrategyInterface):
                         bet_size = pot * 0.5
                         return {"action": "raise", "amount": min(int(bet_size), our_chips)}
                     else:
-                        return {"action": "check"}
+                        return {"action": "call"}
                 elif pot_odds < draw_potential * 0.9:  # Good draw odds
                     return {"action": "call"}
                 else:
@@ -224,7 +224,7 @@ class GTOAgent(StrategyInterface):
             else:
                 # Weak hand, no draw
                 if to_call == 0:
-                    return {"action": "check"}
+                    return {"action": "call"}
                 else:
                     return {"action": "fold"}
 
@@ -236,7 +236,7 @@ class GTOAgent(StrategyInterface):
                     bet_size = pot * 0.6
                     return {"action": "raise", "amount": min(int(bet_size), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             else:
                 # Fold with nothing
                 return {"action": "fold"}

@@ -88,8 +88,8 @@ class DefenderAgent(StrategyInterface):
             if to_call == 0:
                 # Trap occasionally with premium hands
                 if self._should_trap(avg_aggression):
-                    # Limp/check to induce bluffs
-                    return {"action": "check"}
+                    # Limp/call to induce bluffs
+                    return {"action": "call"}
                 else:
                     # Standard raise
                     raise_amount = pot * 0.7
@@ -125,7 +125,7 @@ class DefenderAgent(StrategyInterface):
                     raise_amount = pot * 0.5
                     return {"action": "raise", "amount": min(int(raise_amount), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             elif to_call < pot * 0.3:
                 # Call small bets
                 return {"action": "call"}
@@ -136,8 +136,8 @@ class DefenderAgent(StrategyInterface):
         # Speculative hands (small pairs, suited cards)
         elif strength >= 0.40:
             if to_call == 0:
-                # Check and see flop
-                return {"action": "check"}
+                # Call and see flop
+                return {"action": "call"}
             elif to_call < pot * 0.2 and num_players >= 3:
                 # Call with good implied odds
                 return {"action": "call"}
@@ -152,7 +152,7 @@ class DefenderAgent(StrategyInterface):
                     raise_amount = pot * 0.5
                     return {"action": "raise", "amount": min(int(raise_amount), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             else:
                 return {"action": "fold"}
 
@@ -170,8 +170,8 @@ class DefenderAgent(StrategyInterface):
             if to_call == 0:
                 # Trap with very strong hands vs aggressive opponents
                 if self._should_trap(avg_aggression) and avg_aggression > 2.0:
-                    # Check to induce bluffs
-                    return {"action": "check"}
+                    # Call to induce bluffs
+                    return {"action": "call"}
                 else:
                     # Bet for value
                     bet_size = pot * 0.6
@@ -208,12 +208,12 @@ class DefenderAgent(StrategyInterface):
         # Medium hands (middle pair, weak top pair)
         elif strength >= 0.40:
             if to_call == 0:
-                # Pot control - check or small bet
+                # Pot control - call or small bet
                 if num_players <= 2:
                     bet_size = pot * 0.35
                     return {"action": "raise", "amount": min(int(bet_size), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             else:
                 # Call down lighter vs aggression
                 if avg_aggression > 2.0 and to_call < pot * 0.7:
@@ -232,7 +232,7 @@ class DefenderAgent(StrategyInterface):
                     # Check-raise with draws vs aggressive opponents
                     if avg_aggression > 2.5 and random.random() < 0.3:
                         # They'll likely bet, then we raise
-                        return {"action": "check"}
+                        return {"action": "call"}
                     else:
                         # Small bet with draws
                         bet_size = pot * 0.4
@@ -247,7 +247,7 @@ class DefenderAgent(StrategyInterface):
             else:
                 # Weak hand, no draw
                 if to_call == 0:
-                    return {"action": "check"}
+                    return {"action": "call"}
                 else:
                     # Occasionally call down with bluff-catchers vs maniacs
                     if avg_bluff_rate > 0.4 and to_call < pot * 0.5 and phase == "RIVER":
@@ -263,7 +263,7 @@ class DefenderAgent(StrategyInterface):
                     bet_size = pot * 0.5
                     return {"action": "raise", "amount": min(int(bet_size), our_chips)}
                 else:
-                    return {"action": "check"}
+                    return {"action": "call"}
             else:
                 # Occasionally bluff-catch on river vs super aggressive
                 if (phase == "RIVER" and avg_bluff_rate > 0.5 and
