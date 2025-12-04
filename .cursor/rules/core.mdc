@@ -1,0 +1,86 @@
+---
+alwaysApply: true
+---
+
+# AI Texas Hold'em Poker Bot - Core Principles
+
+## Project Mission
+
+Build a world-class poker bot capable of learning and adapting to defeat any opponent through machine learning and optimal strategy discovery. The system must be flexible, trainable, and avoid hardcoded strategic decisions.
+
+## Foundational Principles
+
+### 1. Strategy Flexibility Over Hardcoding
+- **NEVER hardcode specific strategic decisions** (e.g., "always raise with AA", "bluff 15% of time")
+- **DO provide configurable parameters** that can be learned/optimized through training
+- **DO separate game mechanics from strategic decision-making**
+- **DO design systems that support ML-based strategy evolution**
+
+### 2. Separation of Concerns
+- **Game State Management**: Track cards, pots, players (bot.py)
+- **Hand Evaluation**: Pure mathematical evaluation of hand strength (hand_evaluator.py)
+- **Decision Engine**: Strategic action selection - MUST be trainable (decision_engine.py)
+- **Opponent Modeling**: Player profiling and statistics (opponent_tracker.py)
+- **Protocol Handling**: WebSocket communication (competition_adapter.py)
+
+### 3. ML-First Architecture
+- All strategic parameters should be:
+  - Configurable via external files/models
+  - Trainable through reinforcement learning or other ML approaches
+  - Observable and loggable for analysis
+  - Testable against various opponent types
+
+### 4. Code Organization
+- **Modules under 400 lines**: Keep files focused and maintainable
+- **Pure functions where possible**: Easier to test and reason about
+- **Type hints everywhere**: Enable better IDE support and catch errors early
+- **Async/await for I/O**: Non-blocking WebSocket communication
+
+### 5. Domain-Driven Design
+- Use poker terminology correctly and consistently
+- Model poker concepts explicitly (positions, phases, actions, hand ranges)
+- Keep poker logic separate from infrastructure (WebSocket, JSON, etc.)
+
+## What This Project IS
+- A trainable poker AI platform
+- A flexible decision-making framework
+- A comprehensive poker game state tracker
+- A research platform for optimal poker strategy
+
+## What This Project IS NOT
+- A hardcoded rule-based poker bot
+- A static GTO solver
+- A predetermined strategy implementation
+- A one-size-fits-all poker player
+
+## Key Success Metrics
+- **Adaptability**: Can the bot learn to exploit different opponent types?
+- **Performance**: Does the bot win consistently across diverse opponents?
+- **Maintainability**: Is the code easy to modify and extend?
+- **Trainability**: Can new strategies be integrated without rewriting core logic?
+
+## When Refactoring or Adding Features
+
+### Ask Yourself:
+1. Am I hardcoding a strategy, or making it learnable?
+2. Does this change maintain clean separation of concerns?
+3. Will this be easy to train/optimize later?
+4. Am I using proper poker terminology?
+5. Is this async-friendly and non-blocking?
+
+### Red Flags to Avoid:
+- Magic numbers in decision logic (use config/learned parameters)
+- Mixing game mechanics with strategic decisions
+- Blocking I/O operations
+- Global mutable state
+- Hardcoded thresholds or action frequencies
+
+## Development Workflow
+1. Implement game mechanics and infrastructure
+2. Create configurable strategy interfaces
+3. Build training/evaluation harness
+4. Train models to discover optimal strategies
+5. Test against diverse opponents
+6. Iterate and improve
+
+This bot's strength will come from its ability to learn and adapt, not from predetermined rules.

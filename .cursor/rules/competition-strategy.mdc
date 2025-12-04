@@ -1,0 +1,474 @@
+---
+alwaysApply: true
+---
+
+# Competition-Specific Strategy Analysis
+
+## Target Environment: dtaing11/Texas-HoldEm-Infrastructure
+
+### Critical Infrastructure Details
+
+#### WebSocket Protocol (EXACT FORMAT)
+```
+Connection: ws://localhost:8080/ws?apiKey=dev&table=table-1&player=p1
+```
+
+**Client → Server Messages:**
+```json
+// Join table
+{"type": "join"}
+
+// Actions
+{"type": "action", "action": "call"}
+{"type": "action", "action": "check"}
+{"type": "action", "action": "fold"}
+{"type": "action", "action": "raise", "amount": 120}
+```
+
+**Server → Client Messages:**
+```json
+// State update
+{
+  "type": "state",
+  "hand": 2,
+  "phase": "TURN",
+  "pot": 540,
+  "players": [...],
+  "communityCards": [...]
+}
+
+// Error
+{
+  "type": "error",
+  "message": "Not your turn"
+}
+```
+
+#### Card Format (DIFFERS FROM OUR CURRENT IMPLEMENTATION!)
+**CRITICAL:** Infrastructure uses JSON objects, NOT strings!
+
+```json
+// Infrastructure format
+{"rank": "A", "suit": "SPADE"}
+{"rank": "K", "suit": "HEART"}
+{"rank": "Q", "suit": "DIAMOND"}
+{"rank": "J", "suit": "CLUB"}
+
+// Our current format (WRONG for this environment)
+"As", "Kh", "Qd", "Jc"
+```
+
+**MUST UPDATE:** `competition_adapter.py` or bot code to handle this format!
+
+#### Player Data Structure
+```json
+{
+  "id": "player1",
+  "chips": 2000,
+  "action": "CALL",
+  "cards": [
+    {"rank": "A", "suit": "SPADE"},
+    {"rank": "K", "suit": "HEART"}
+  ]
+}
+```
+
+#### Game Phases (Exact Enum Values)
+- `WAITING` - Connection phase
+- `PREFLOP` - Blinds posted, 2 cards dealt
+- `FLOP` - 3 community cards
+- `TURN` - 4th community card
+- `RIVER` - 5th community card
+- `SHOWDOWN` - Hand evaluation
+
+#### Action Types (Exact Enum Values)
+- `CHECK` - No bet, pass action
+- `CALL` - Match current bet
+- `RAISE` - Increase bet (must specify amount)
+- `FOLD` - Give up hand
+
+#### Player States
+- `INHAND` - Active in current hand
+- `FOLDED` - Folded this hand
+- `ALLIN` - All chips in pot
+
+---
+
+## Game Mechanics Specifics
+
+### Blind Structure
+- Small blind posts left of dealer button
+- Big blind posts left of small blind
+- If player can't cover blind, they go all-in automatically
+- Dealer button rotates left each hand
+
+### Betting Rules
+1. **MinRaise:** Initially set to big blind
+2. **Raise Validation:** Must exceed MinRaise
+3. **All-in Partial Raise:** Does NOT reset MinRaise or reopen action
+4. **Round Completion:** All non-all-in players must match highest bet
+
+### All-In & Side Pot Mechanics
+- Side pots constructed from contribution tiers
+- Each tier awards to best hand among eligible players
+- Split pot logic: Even division with remainder to first winners
+- **Critical:** Engine handles side pots automatically
+
+### Hand Evaluation
+- Uses `SimpleEvaluator` with standard poker rankings
+- Evaluates 7-card hands (2 hole + 5 community)
+- Ace counts as low (1) for wheel straight (A-2-3-4-5)
+- Higher `HandRank` value wins
+- Ties result in split pots
+
+### Win Conditions
+- **Immediate Win:** If only one non-folded player remains (pot awarded)
+- **Showdown:** Best hand wins after all betting rounds complete
+
+---
+
+## Optimal Strategy Research Summary
+
+### Algorithm Comparison (2025 Research)
+
+#### 1. CFR (Counterfactual Regret Minimization)
+**Description:** Game-theoretic approach that converges to Nash equilibrium
+
+**Pros:**
+- Provably converges to Nash equilibrium
+- Exploitability approaches zero
+- Used by Libratus and Pluribus (superhuman AIs)
+- Best for GTO (unexploitable) play
+
+**Cons:**
+- Computationally expensive (massive game tree)
+- Requires extensive precomputation
+- Slow real-time response without abstraction
+- Needs card/bet abstraction for tractability
+
+**Performance:**
+- Pluribus: Superhuman in 6-player poker
+- Training cost: ~$144 for 8 days (2019)
+- Modern implementations: ~7-12 days on GPU
+
+**Verdict for Student Competition:** Overkill unless you have significant compute resources and time
+
+---
+
+#### 2. MCTS (Monte Carlo Tree Search)
+**Description:** Tree search with Monte Carlo rollouts
+
+**Your Teacher's Suggestion Analysis:**
+- Good for real-time decision making
+- Exploration-driven
+- Can be effective with proper opponent modeling
+- Used successfully in perfect information games
+
+**Pros:**
+- Intuitive implementation
+- No extensive pretraining needed
+- Can adapt to opponent tendencies
+- Good for exploitative play
+
+**Cons:**
+- Slower convergence to optimal strategy
+- High variance in results
+- Struggles with hidden information (poker's key challenge)
+- Requires many simulations per decision
+- Performance ~-112 BB/100 vs strong opponents
+
+**Poker-Specific Issues:**
+- Hidden opponent cards require "determinization" (guessing opponent hands)
+- Leads to "strategy fusion" problem (mixing strategies for different hands)
+- Performs worse than CFR in research comparisons
+
+**Verdict for Student Competition:** Reasonable choice if properly tuned, but not optimal
+
+---
+
+#### 3. Reinforcement Learning (Actor-Critic)
+**Description:** Neural network learns policy through self-play
+
+**Pros:**
+- Fast real-time inference (7.3 ms average)
+- No massive game tree traversal
+- Learns generalizable patterns
+- Beat hand-ranking, rule-based, and MCTS opponents
+- Moderate training time (7-12 hours on RTX 2080)
+- Adapts to opponent types
+
+**Cons:**
+- Requires careful network architecture design
+- Needs significant training data (1M+ hands)
+- May not reach true Nash equilibrium
+- Can be exploitable if undertrained
+
+**Performance (vs baselines):**
+- +4.08 sb/h vs Sklansky hand rankings
+- +3.90 sb/h vs MCTS
+- +3.27 sb/h vs rule-based strategy
+
+**Verdict for Student Competition:** STRONG CONTENDER - Good balance of performance and feasibility
+
+---
+
+#### 4. Hybrid Approach (RECOMMENDED)
+**Description:** Combine multiple techniques strategically
+
+**Suggested Architecture:**
+```
+Preflop: Lookup table (169 hand combinations)
+    ↓
+Postflop: RL Policy Network OR MCTS with learned heuristics
+    ↓
+Opponent Modeling: Track statistics, adapt in real-time
+    ↓
+Bluffing/Trapping: Randomized based on learned frequencies
+```
+
+**Why This Works:**
+1. **Preflop is solved:** Only 169 unique starting hands, use precomputed ranges
+2. **Postflop needs adaptation:** RL learns board textures and situations
+3. **Opponent exploitation:** Track VPIP, PFR, aggression → adjust strategy
+4. **Computational feasibility:** Trainable in days, not weeks
+
+---
+
+## Recommended Strategy for THIS Competition
+
+### Assessment of Competition Environment
+- **Opponents:** Other students (likely weaker than professional bots)
+- **Timeframe:** Semester project (limited development time)
+- **Resources:** Personal computers (no supercomputer access)
+- **Goal:** Win against peers, not achieve perfect GTO
+
+### Optimal Approach: **Exploitative RL + Opponent Modeling**
+
+#### Phase 1: Foundation (Week 1-2)
+1. **Fix Protocol Compatibility**
+   - Update card format parsing (JSON objects vs strings)
+   - Verify all message formats match infrastructure exactly
+   - Test WebSocket connection thoroughly
+
+2. **Implement Baseline Strategy**
+   - Preflop: Chen formula with position adjustments
+   - Postflop: Pot odds + equity calculations
+   - Simple opponent tracking (VPIP, PFR, aggression)
+
+#### Phase 2: Core AI (Week 3-5)
+3. **Actor-Critic RL Implementation**
+   ```python
+   class PokerActor(nn.Module):
+       """Decides actions based on partial information"""
+       def __init__(self):
+           self.fc1 = nn.Linear(input_features, 256)
+           self.lstm = nn.LSTM(256, 128)
+           self.action_head = nn.Linear(128, num_actions)
+           self.bet_size_head = nn.Linear(128, 1)
+
+   class PokerCritic(nn.Module):
+       """Evaluates decisions with perfect information"""
+       def __init__(self):
+           self.fc1 = nn.Linear(full_state_features, 256)
+           self.fc2 = nn.Linear(256, 128)
+           self.value_head = nn.Linear(128, 1)
+   ```
+
+4. **Training Pipeline**
+   - Self-play: 500K - 1M hands
+   - Opponent diversity: Train against varied strategies
+   - Data collection: Log all decisions with outcomes
+   - Validation: Test against baseline strategies
+
+#### Phase 3: Opponent Exploitation (Week 6-7)
+5. **Advanced Opponent Modeling**
+   - Track per-player statistics (VPIP, PFR, AF, 3-bet%, fold to c-bet)
+   - Classify player types (TAG, LAG, Fish, Rock)
+   - Adjust strategy dynamically:
+     ```python
+     if opponent_type == "Fish":
+         value_bet_frequency *= 1.5  # Extract more value
+         bluff_frequency *= 0.5      # Don't bluff calling stations
+     elif opponent_type == "TAG":
+         bluff_frequency *= 1.3      # Exploit tight folds
+         value_bet_size *= 0.8       # They won't overpay
+     ```
+
+6. **Exploitation Strategies**
+   - Against tight players: Steal blinds aggressively
+   - Against loose players: Value bet relentlessly
+   - Against aggressive players: Trap with strong hands
+   - Against passive players: Bet often, rarely bluff
+
+#### Phase 4: Optimization (Week 8-9)
+7. **Performance Tuning**
+   - Profile hot paths (hand evaluation, decision making)
+   - Optimize WebSocket response time (<50ms)
+   - Reduce memory usage for long sessions
+   - Handle edge cases (disconnections, timeouts)
+
+8. **Testing & Validation**
+   - Run 10,000+ hands against test opponents
+   - Verify positive win rate vs all opponent types
+   - Test in actual infrastructure environment
+   - Stress test edge cases (all-in, side pots, etc.)
+
+#### Phase 5: Refinement (Week 10+)
+9. **Continuous Improvement**
+   - Analyze hand histories for mistakes
+   - Retrain on new data (including competition games)
+   - Fine-tune opponent modeling thresholds
+   - A/B test strategy variants
+
+---
+
+## Key Competitive Advantages
+
+### 1. Opponent Modeling (Critical for Student Competition)
+Most student bots will have fixed strategies. By tracking and adapting:
+- Identify exploitable patterns quickly (within 20-50 hands)
+- Adjust strategy per opponent
+- Win more chips from weak players, lose less to strong ones
+
+### 2. Fast Adaptation
+- Online learning: Update model during competition
+- Recent hand weighting: Adapt to opponent adjustments
+- Meta-game awareness: If opponent changes strategy, detect and counter
+
+### 3. Robust Edge Case Handling
+Many student bots will crash or play poorly in edge cases:
+- All-in situations
+- Multi-way pots
+- Short stack scenarios
+- Disconnection recovery
+
+Ensure your bot handles EVERYTHING gracefully.
+
+### 4. Psychological Warfare (via randomization)
+- Randomize timing of actions (don't always respond instantly)
+- Vary bet sizing (not always 0.5x, 1x, 2x pot)
+- Occasional "unusual" plays to keep opponents guessing
+- Balanced bluffing (not 0% or 100%)
+
+---
+
+## Implementation Priority
+
+### Must-Have (Required to Compete)
+- [ ] Correct WebSocket protocol implementation
+- [ ] Card format compatibility (JSON objects!)
+- [ ] Valid action generation (no illegal moves)
+- [ ] Basic hand evaluation (accurate rankings)
+- [ ] Pot odds calculation
+- [ ] Position awareness
+
+### Should-Have (To Win Consistently)
+- [ ] Opponent tracking (VPIP, PFR, aggression)
+- [ ] Adaptive strategy (exploit weak opponents)
+- [ ] RL-based decision making OR strong heuristics
+- [ ] Proper bankroll management (don't go bust early)
+- [ ] All-in handling (correct side pot logic)
+
+### Nice-to-Have (To Dominate)
+- [ ] Advanced opponent modeling (classify player types)
+- [ ] Real-time learning (adapt during competition)
+- [ ] Range-based thinking (not just hand strength)
+- [ ] ICM awareness (if tournament structure)
+- [ ] Table dynamics (adjust to overall table aggression)
+
+---
+
+## Red Flags to Avoid
+
+### Common Student Bot Mistakes
+1. **Hardcoded thresholds** - "Always raise with AA" (predictable)
+2. **No opponent modeling** - Playing same vs everyone (exploitable)
+3. **Overfitting to test data** - Works in training, fails in competition
+4. **Edge case crashes** - All-in, side pots, disconnections
+5. **Too tight** - Waits for premium hands, bleeds blinds
+6. **Too loose** - Plays too many hands, loses chips
+7. **Predictable bet sizing** - Always 1x pot (telegraphs hand strength)
+8. **No bluffing** - Completely exploitable by folding to all bets
+9. **Too much bluffing** - Opponents learn to call down
+
+### Testing Checklist
+- [ ] Test vs tight opponent (10K hands)
+- [ ] Test vs loose opponent (10K hands)
+- [ ] Test vs aggressive opponent (10K hands)
+- [ ] Test vs passive opponent (10K hands)
+- [ ] Test all-in scenarios
+- [ ] Test side pot calculations
+- [ ] Test short stack play (<10 BB)
+- [ ] Test deep stack play (>100 BB)
+- [ ] Test heads-up
+- [ ] Test multi-way pots (3+ players)
+
+---
+
+## Timeline Recommendation
+
+### Realistic 10-Week Plan
+- **Weeks 1-2:** Protocol compatibility, baseline strategy
+- **Weeks 3-5:** RL implementation and training
+- **Weeks 6-7:** Opponent modeling and exploitation
+- **Weeks 8-9:** Testing and optimization
+- **Week 10+:** Final tuning and competition prep
+
+### Aggressive 6-Week Plan (if short on time)
+- **Week 1:** Protocol + strong baseline (pot odds + equity)
+- **Weeks 2-3:** Opponent tracking + adaptive heuristics
+- **Weeks 4-5:** RL training OR advanced MCTS
+- **Week 6:** Testing + bug fixes
+
+### Fallback Plan (if RL fails)
+If RL doesn't train well or you run out of time:
+1. Strong pot odds + equity baseline
+2. Aggressive opponent exploitation
+3. Position-based strategy adjustments
+4. Solid bluffing randomization (15-25% frequency)
+
+This can still beat most student bots!
+
+---
+
+## Competitive Intelligence
+
+### Likely Opponent Strategies
+Based on typical student projects:
+- **30%:** Basic rule-based (if-then logic)
+- **25%:** Hand strength only (no position/opponents)
+- **20%:** MCTS (teacher's suggestion)
+- **15%:** Simple RL or Q-learning
+- **10%:** Advanced (CFR, deep RL, hybrid)
+
+### Your Edge
+- Better opponent modeling
+- Faster adaptation
+- Robust implementation (no crashes)
+- Strategic diversity (not one-dimensional)
+
+---
+
+## Final Recommendations
+
+### For Maximum Win Rate
+1. **Don't aim for perfect GTO** - Aim to exploit student-level play
+2. **Prioritize opponent modeling** - Most bots won't adapt
+3. **Be robust** - Handle all edge cases without crashing
+4. **Train on diverse opponents** - Don't overfit to one strategy
+5. **Test extensively** - 100K+ hands before competition
+6. **Keep it simple** - Complex doesn't always mean better
+7. **Optimize for THIS environment** - Not theoretical poker
+
+### The Winning Formula
+```
+Solid Baseline (50% of success)
++ Opponent Exploitation (30% of success)
++ Robust Implementation (15% of success)
++ Strategic Randomization (5% of success)
+= Dominant Student Bot
+```
+
+Remember: You don't need to beat Phil Ivey. You need to beat other students. Focus on what works in THIS specific environment with THESE specific opponents.
+
+**DOMINATE THE COMPETITION!** 🏆

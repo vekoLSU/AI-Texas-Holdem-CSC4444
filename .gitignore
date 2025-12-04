@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+logs/
+models/
+checkpoints/
+.env
+.DS_Store
+
+# Python package build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+

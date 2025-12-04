@@ -1,0 +1,659 @@
+---
+globs: ["*.py"]
+alwaysApply: false
+---
+
+# Performance & Async Patterns
+
+## Core Principle
+
+The poker bot operates in a **real-time, event-driven environment**. All I/O operations must be non-blocking to ensure:
+- Responsive gameplay (fast decisions)
+- Ability to handle multiple concurrent games (future multi-table support)
+- Efficient resource usage
+- No timeout violations
+
+---
+
+## Async/Await Fundamentals
+
+### Always Use Async for I/O
+
+```python
+# Good - Non-blocking WebSocket I/O
+async def connect_and_play(self):
+    async with websockets.connect(self.server_url) as ws:
+        await ws.send(json.dumps(message))
+        response = await ws.recv()
+
+# Bad - Blocking (will freeze bot)
+def connect_and_play(self):
+    ws = websockets.connect(self.server_url)  # Wrong!
+    ws.send(message)  # Blocks entire process
+```
+
+### Event Loop Management
+
+```python
+# Good - Run async function in event loop
+async def main():
+    bot = PokerBot(...)
+    await bot.connect_and_play()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+# Bad - Mixing sync and async incorrectly
+def main():
+    bot = PokerBot(...)
+    bot.connect_and_play()  # Won't work!
+```
+
+### Async Method Signatures
+
+```python
+# Good - Async methods that do I/O
+async def send_message(self, ws, message: Dict) -> None:
+    await ws.send(json.dumps(message))
+
+async def handle_message(self, ws, raw_message: str) -> None:
+    msg = json.loads(raw_message)
+    # Process message
+    if msg["type"] == "state":
+        await self.handle_state_update(ws, msg)
+
+# Good - Sync methods for pure computation
+def evaluate_hand_strength(self, hand_cards: List[str], community_cards: List[str]) -> Dict:
+    # Pure computation, no I/O
+    return {"strength": 0.75, "hand_type": "pair"}
+```
+
+---
+
+## Never Block the Event Loop
+
+### Don'ts - Blocking Operations
+
+```python
+# Bad - Blocking sleep
+import time
+def wait_before_action(self):
+    time.sleep(1)  # BLOCKS ENTIRE EVENT LOOP!
+
+# Bad - Blocking file I/O
+def load_config(self):
+    with open("config.json") as f:  # Blocks on disk I/O
+        return json.load(f)
+
+# Bad - Blocking network request
+import requests
+def fetch_data(self):
+    response = requests.get(url)  # Blocks on network
+```
+
+### Do's - Non-blocking Alternatives
+
+```python
+# Good - Async sleep
+async def wait_before_action(self):
+    await asyncio.sleep(1)  # Non-blocking
+
+# Good - Async file I/O (if needed frequently)
+import aiofiles
+async def load_config(self):
+    async with aiofiles.open("config.json") as f:
+        content = await f.read()
+        return json.loads(content)
+
+# Good - Async HTTP (if needed)
+import aiohttp
+async def fetch_data(self):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
+
+# Best - Load config once at startup (sync is OK at startup)
+def __init__(self):
+    with open("config.json") as f:
+        self.config = json.load(f)  # Only during init
+```
+
+---
+
+## WebSocket Patterns
+
+### Connection Management
+
+```python
+class PokerBot:
+    async def connect_and_play(self):
+        """Main connection loop with auto-reconnect."""
+        while True:
+            try:
+                async with websockets.connect(self.server_url) as ws:
+                    print(f"✅ Connected to {self.server_url}")
+
+                    # Send initial join message
+                    await self.send_message(ws, {
+                        "type": "join",
+                        "apiKey": self.api_key,
+                        "table": self.table,
+                        "player": self.player
+                    })
+
+                    # Main message loop
+                    async for message in ws:
+                        await self.handle_message(ws, message)
+
+            except websockets.exceptions.ConnectionClosed:
+                print("⚠️  Connection closed, reconnecting...")
+                await asyncio.sleep(2)  # Wait before reconnect
+
+            except Exception as e:
+                print(f"[ERROR] {e}")
+                traceback.print_exc()
+                break
+```
+
+### Message Handling
+
+```python
+async def handle_message(self, ws, raw_message: str):
+    """Process incoming WebSocket message."""
+    try:
+        msg = json.loads(raw_message)
+        msg_type = msg.get("type")
+
+        if msg_type == "state":
+            await self.handle_state_update(ws, msg)
+        elif msg_type == "showdown":
+            self.handle_showdown(msg)  # Pure computation, no await needed
+        elif msg_type == "error":
+            print(f"⚠️  Server error: {msg.get('message')}")
+        else:
+            print(f"[DEBUG] Unknown message type: {msg_type}")
+
+    except json.JSONDecodeError:
+        print(f"⚠️  Invalid JSON: {raw_message}")
+    except Exception as e:
+        print(f"[ERROR] Exception in handle_message: {e}")
+        traceback.print_exc()
+```
+
+### Sending Messages
+
+```python
+async def send_message(self, ws, message: Dict) -> None:
+    """Send message over WebSocket."""
+    try:
+        await ws.send(json.dumps(message))
+    except websockets.exceptions.ConnectionClosed:
+        print("⚠️  Cannot send - connection closed")
+    except Exception as e:
+        print(f"[ERROR] Send failed: {e}")
+```
+
+---
+
+## Computation Optimization
+
+### Hand Evaluation Performance
+
+Hand evaluation is called frequently and must be fast:
+
+```python
+# Good - Pre-compute lookup tables
+class HandEvaluator:
+    def __init__(self):
+        # Pre-compute card values once
+        self.CARD_VALUES = {
+            "2": 2, "3": 3, "4": 4, "5": 5, "6": 6,
+            "7": 7, "8": 8, "9": 9, "T": 10,
+            "J": 11, "Q": 12, "K": 13, "A": 14
+        }
+
+        self.HAND_RANKS = {
+            "royal_flush": 10,
+            "straight_flush": 9,
+            # ... etc
+        }
+
+    def get_card_value(self, card: str) -> int:
+        """O(1) lookup."""
+        return self.CARD_VALUES[card[0]]
+
+# Bad - Recompute every time
+def get_card_value(self, card: str) -> int:
+    """O(n) search every time!"""
+    ranks = "23456789TJQKA"
+    return ranks.index(card[0]) + 2
+```
+
+### Caching Expensive Calculations
+
+```python
+from functools import lru_cache
+
+class HandEvaluator:
+    @lru_cache(maxsize=1024)
+    def evaluate_preflop(self, hand_tuple: tuple) -> float:
+        """
+        Cache preflop evaluations (only 169 unique starting hands).
+
+        Note: hand must be tuple (immutable) for caching to work.
+        """
+        card1, card2 = hand_tuple
+        # Calculate Chen formula...
+        return strength
+
+# Usage
+def evaluate_preflop_hand(self, hand_cards: List[str]) -> float:
+    # Convert to tuple for caching
+    hand_tuple = tuple(sorted(hand_cards))
+    return self.evaluate_preflop(hand_tuple)
+```
+
+### Avoid Redundant Calculations
+
+```python
+# Bad - Calculate same thing multiple times
+def decide_postflop(self, hand_cards, community_cards, ...):
+    pot_odds = to_call / (pot + to_call)  # Calculated
+    equity = self.estimate_equity(hand_cards, community_cards)  # Calculated
+
+    if equity > pot_odds:
+        return "call"
+
+    # Later in same method...
+    pot_odds = to_call / (pot + to_call)  # Recalculated!
+    if pot_odds < 0.3:
+        return "fold"
+
+# Good - Calculate once, reuse
+def decide_postflop(self, hand_cards, community_cards, ...):
+    pot_odds = to_call / (pot + to_call)
+    equity = self.estimate_equity(hand_cards, community_cards)
+
+    if equity > pot_odds:
+        return "call"
+
+    if pot_odds < 0.3:  # Reuse calculated value
+        return "fold"
+```
+
+---
+
+## Memory Management
+
+### Avoid Memory Leaks in Long-Running Bot
+
+```python
+# Bad - Unbounded growth
+class OpponentTracker:
+    def __init__(self):
+        self.action_history = []  # Grows forever!
+
+    def record_action(self, player, action, amount, phase):
+        self.action_history.append({...})  # Memory leak!
+
+# Good - Bounded history
+class OpponentTracker:
+    def __init__(self, max_history=1000):
+        self.action_history = deque(maxlen=max_history)  # Auto-prunes
+
+    def record_action(self, player, action, amount, phase):
+        self.action_history.append({...})  # Old entries auto-removed
+```
+
+### Clear Stale Data
+
+```python
+class PokerBot:
+    def handle_showdown(self, msg):
+        """Clear hand-specific data after showdown."""
+        # Record results
+        self.hands_played += 1
+
+        # Clear hand state
+        self.hand_cards = []
+        self.community_cards = []
+        self.current_phase = None
+
+        # Keep player stats, but clear per-hand data
+```
+
+---
+
+## Concurrent Operations (Future Multi-Table)
+
+### Running Multiple Tables
+
+```python
+async def play_multiple_tables(self, table_urls: List[str]):
+    """Play multiple poker tables concurrently."""
+
+    async def play_table(table_url):
+        bot = PokerBot(server_url=table_url, ...)
+        await bot.connect_and_play()
+
+    # Run all tables concurrently
+    tasks = [play_table(url) for url in table_urls]
+    await asyncio.gather(*tasks)
+
+# Usage
+if __name__ == "__main__":
+    tables = [
+        "ws://localhost:8080/table1",
+        "ws://localhost:8080/table2",
+        "ws://localhost:8080/table3"
+    ]
+    asyncio.run(play_multiple_tables(tables))
+```
+
+### Task Coordination
+
+```python
+async def coordinated_play(self):
+    """Run multiple concurrent tasks."""
+
+    # Create tasks
+    game_task = asyncio.create_task(self.play_game())
+    stats_task = asyncio.create_task(self.log_statistics())
+    model_update_task = asyncio.create_task(self.periodic_model_update())
+
+    # Wait for all
+    await asyncio.gather(game_task, stats_task, model_update_task)
+
+async def periodic_model_update(self):
+    """Update ML model periodically without blocking gameplay."""
+    while True:
+        await asyncio.sleep(300)  # Every 5 minutes
+        self.strategy.update_from_recent_data()
+```
+
+---
+
+## Error Handling & Resilience
+
+### Graceful Degradation
+
+```python
+async def handle_state_update(self, ws, msg):
+    """Handle state update with fallback logic."""
+    try:
+        # Try to get opponent profiles
+        opponent_profiles = self.opponent_tracker.get_opponent_profiles()
+    except Exception as e:
+        print(f"⚠️  Opponent tracking failed: {e}")
+        opponent_profiles = {}  # Use empty profiles as fallback
+
+    try:
+        # Try to make decision
+        decision = self.decision_engine.decide(...)
+    except Exception as e:
+        print(f"⚠️  Decision engine failed: {e}")
+        decision = {"action": "fold", "amount": 0}  # Safe fallback
+
+    # Always send some response
+    await self.send_message(ws, decision)
+```
+
+### Timeout Protection
+
+```python
+async def make_decision_with_timeout(self, game_state, timeout=5.0):
+    """Make decision with timeout protection."""
+    try:
+        decision = await asyncio.wait_for(
+            self.decision_engine.decide_async(game_state),
+            timeout=timeout
+        )
+        return decision
+    except asyncio.TimeoutError:
+        print("⚠️  Decision timeout - using fast fallback")
+        return {"action": "fold", "amount": 0}
+```
+
+---
+
+## Logging Performance
+
+### Async Logging (High-Frequency)
+
+```python
+import logging
+from logging.handlers import QueueHandler, QueueListener
+import queue
+
+class PerformantLogger:
+    """Non-blocking logger using queue."""
+
+    def __init__(self):
+        # Create queue for log records
+        self.log_queue = queue.Queue()
+
+        # Handler that writes to queue
+        queue_handler = QueueHandler(self.log_queue)
+
+        # Actual file handler (runs in separate thread)
+        file_handler = logging.FileHandler("bot_decisions.log")
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s'
+        ))
+
+        # Listener processes queue in background thread
+        self.listener = QueueListener(self.log_queue, file_handler)
+        self.listener.start()
+
+        # Configure logger
+        logger = logging.getLogger("poker_bot")
+        logger.addHandler(queue_handler)
+        logger.setLevel(logging.INFO)
+
+        self.logger = logger
+
+    def log_decision(self, decision_data):
+        """Non-blocking log."""
+        self.logger.info(json.dumps(decision_data))
+```
+
+### Conditional Debug Logging
+
+```python
+# Bad - Always format string even if not logged
+def make_decision(self, ...):
+    print(f"[DEBUG] Game state: {json.dumps(game_state, indent=2)}")
+    # String formatting happens even if debug is off!
+
+# Good - Only format if needed
+import logging
+logger = logging.getLogger(__name__)
+
+def make_decision(self, ...):
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Game state: {json.dumps(game_state, indent=2)}")
+    # String formatting only happens if debug enabled
+```
+
+---
+
+## Profiling & Optimization
+
+### Finding Bottlenecks
+
+```python
+import cProfile
+import pstats
+
+def profile_bot_performance():
+    """Profile bot to find slow operations."""
+    profiler = cProfile.Profile()
+    profiler.enable()
+
+    # Run bot for some hands
+    bot = PokerBot(...)
+    asyncio.run(bot.connect_and_play())
+
+    profiler.disable()
+
+    # Print stats
+    stats = pstats.Stats(profiler)
+    stats.sort_stats('cumulative')
+    stats.print_stats(20)  # Top 20 slowest functions
+```
+
+### Memory Profiling
+
+```python
+from memory_profiler import profile
+
+@profile
+def evaluate_many_hands(self):
+    """Profile memory usage."""
+    for i in range(10000):
+        hand = self.generate_random_hand()
+        strength = self.evaluator.evaluate_hand_strength(hand, board)
+```
+
+### Timing Critical Sections
+
+```python
+import time
+
+class PerformanceMonitor:
+    def __init__(self):
+        self.timings = defaultdict(list)
+
+    def time_it(self, name):
+        """Context manager for timing."""
+        return TimingContext(self, name)
+
+class TimingContext:
+    def __init__(self, monitor, name):
+        self.monitor = monitor
+        self.name = name
+
+    def __enter__(self):
+        self.start = time.perf_counter()
+        return self
+
+    def __exit__(self, *args):
+        elapsed = time.perf_counter() - self.start
+        self.monitor.timings[self.name].append(elapsed)
+
+# Usage
+monitor = PerformanceMonitor()
+
+with monitor.time_it("hand_evaluation"):
+    strength = evaluator.evaluate_hand_strength(...)
+
+with monitor.time_it("decision_making"):
+    decision = engine.decide(...)
+
+# Print average timings
+for name, times in monitor.timings.items():
+    avg = sum(times) / len(times)
+    print(f"{name}: {avg*1000:.2f}ms average")
+```
+
+---
+
+## Optimization Checklist
+
+### Before Optimizing
+- [ ] Profile to find actual bottlenecks
+- [ ] Measure current performance
+- [ ] Set target performance goals
+- [ ] Identify if issue is CPU, I/O, or memory
+
+### Common Optimizations
+- [ ] Use async for all I/O (WebSocket, file, network)
+- [ ] Cache expensive computations (preflop evaluations)
+- [ ] Pre-compute lookup tables (card values, hand ranks)
+- [ ] Avoid redundant calculations in hot paths
+- [ ] Use appropriate data structures (dict for O(1) lookup)
+- [ ] Limit history/buffer sizes (prevent memory leaks)
+- [ ] Batch operations when possible (log writes)
+- [ ] Use generators for large sequences
+
+### Performance Targets
+- **Hand evaluation**: <1ms per evaluation
+- **Decision making**: <10ms per decision
+- **WebSocket response**: <50ms total (receive → decide → send)
+- **Memory usage**: <500MB for single table, <2GB for 4 tables
+- **No blocking**: Event loop never blocked >1ms
+
+---
+
+## Async Best Practices Summary
+
+### Do's
+✓ Use `async def` for any function that does I/O
+✓ Use `await` for all async function calls
+✓ Use `async with` for WebSocket connections
+✓ Use `await asyncio.sleep()` instead of `time.sleep()`
+✓ Use `asyncio.gather()` for concurrent operations
+✓ Handle exceptions in async code (try/except)
+✓ Use `asyncio.run()` as main entry point
+✓ Keep CPU-intensive work in sync functions
+✓ Profile before optimizing
+
+### Don'ts
+✗ Don't use blocking I/O in async functions
+✗ Don't use `time.sleep()` (blocks event loop)
+✗ Don't use blocking file I/O in hot paths
+✗ Don't forget `await` on async calls
+✗ Don't mix sync and async incorrectly
+✗ Don't create unbounded buffers/histories
+✗ Don't ignore connection errors
+✗ Don't optimize prematurely (profile first)
+
+---
+
+## Future Performance Enhancements
+
+### Parallel Hand Simulation
+```python
+async def simulate_many_hands(self, num_simulations=10000):
+    """Run Monte Carlo simulations in parallel."""
+    tasks = [
+        self.simulate_single_hand()
+        for _ in range(num_simulations)
+    ]
+    results = await asyncio.gather(*tasks)
+    return self.aggregate_results(results)
+```
+
+### Batch Processing for Training
+```python
+async def batch_train(self, data_files: List[str]):
+    """Process multiple training files concurrently."""
+    async def process_file(filepath):
+        data = await self.load_training_data(filepath)
+        return self.preprocess(data)
+
+    tasks = [process_file(f) for f in data_files]
+    processed_data = await asyncio.gather(*tasks)
+    return self.combine_batches(processed_data)
+```
+
+### Multi-GPU Training (If Applicable)
+```python
+def train_on_multiple_gpus(self, data):
+    """Distribute training across GPUs."""
+    # Use PyTorch DataParallel or similar
+    model = nn.DataParallel(model, device_ids=[0, 1, 2, 3])
+```
+
+---
+
+## Summary
+
+Performance is critical for a competitive poker bot:
+1. **Async I/O**: Never block the event loop
+2. **Fast Computation**: Optimize hot paths (hand evaluation, decision making)
+3. **Memory Efficiency**: Limit buffer sizes, clear stale data
+4. **Resilience**: Handle errors gracefully, use timeouts
+5. **Monitoring**: Profile, measure, optimize based on data
+
+The bot must be **fast enough to compete** while remaining **maintainable and extensible**.

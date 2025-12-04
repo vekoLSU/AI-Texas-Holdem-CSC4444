@@ -1,0 +1,278 @@
+PokerStars Hand #243891234567: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:23:11 ET
+Table 'Hydra II' 6-max Seat #3 is the button
+Seat 1: Hero ($150.00 in chips)
+Seat 2: Villain1 ($98.50 in chips)
+Seat 3: Villain2 ($205.00 in chips)
+Villain1: posts small blind $0.50
+Villain2: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [Kd Kh]
+Hero: raises $3 to $4
+Villain1: calls $3.50
+Villain2: calls $3
+*** FLOP *** [3d 6h 9c]
+Villain1: checks
+Villain2: checks
+Hero: bets $8
+Villain1: folds
+Villain2: calls $8
+*** TURN *** [3d 6h 9c] [2s]
+Villain2: checks
+Hero: bets $20
+Villain2: calls $20
+*** RIVER *** [3d 6h 9c 2s] [Qh]
+Villain2: checks
+Hero: bets $40
+Villain2: folds
+Uncalled bet ($40) returned to Hero
+Hero collected $65 from pot
+Hero: doesn't show hand
+*** SUMMARY ***
+Total pot $68 | Rake $3
+Board [3d 6h 9c 2s Qh]
+Seat 1: Hero collected ($65)
+Seat 2: Villain1 (small blind) folded on the Flop
+Seat 3: Villain2 (button) (big blind) folded on the River
+
+
+PokerStars Hand #243891234568: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:25:33 ET
+Table 'Hydra II' 6-max Seat #1 is the button
+Seat 1: Hero ($183.00 in chips)
+Seat 2: Villain1 ($94.50 in chips)
+Seat 3: Villain2 ($173.00 in chips)
+Hero: posts small blind $0.50
+Villain1: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [As Ks]
+Villain2: raises $3 to $4
+Hero: raises $12 to $16
+Villain1: folds
+Villain2: calls $12
+*** FLOP *** [Ah 7c 3h]
+Hero: bets $12
+Villain2: raises $24 to $36
+Hero: calls $24
+*** TURN *** [Ah 7c 3h] [Kc]
+Hero: checks
+Villain2: bets $50
+Hero: raises $81 to $131 and is all-in
+Villain2: folds
+Uncalled bet ($81) returned to Hero
+Hero collected $201 from pot
+Hero: doesn't show hand
+*** SUMMARY ***
+Total pot $205 | Rake $4
+Board [Ah 7c 3h Kc]
+Seat 1: Hero (small blind) collected ($201)
+Seat 2: Villain1 (big blind) folded before Flop
+Seat 3: Villain2 folded on the Turn
+
+
+PokerStars Hand #243891234569: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:27:45 ET
+Table 'Hydra II' 6-max Seat #2 is the button
+Seat 1: Hero ($285.00 in chips)
+Seat 2: Villain1 ($93.50 in chips)
+Seat 3: Villain2 ($71.00 in chips)
+Villain1: posts small blind $0.50
+Villain2: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [9d 9h]
+Hero: raises $2.50 to $3.50
+Villain1: folds
+Villain2: calls $2.50
+*** FLOP *** [2c 5h 9s]
+Villain2: checks
+Hero: bets $4
+Villain2: raises $8 to $12
+Hero: calls $8
+*** TURN *** [2c 5h 9s] [4d]
+Villain2: bets $18
+Hero: calls $18
+*** RIVER *** [2c 5h 9s 4d] [6c]
+Villain2: bets $37.50 and is all-in
+Hero: calls $37.50
+*** SHOW DOWN ***
+Villain2: shows [3s 7s] (a straight, Three to Seven)
+Hero: shows [9d 9h] (three of a kind, Nines)
+Villain2 collected $140 from pot
+*** SUMMARY ***
+Total pot $142.50 | Rake $2.50
+Board [2c 5h 9s 4d 6c]
+Seat 1: Hero showed [9d 9h] and lost with three of a kind, Nines
+Seat 2: Villain1 (button) (small blind) folded before Flop
+Seat 3: Villain2 (big blind) showed [3s 7s] and won ($140) with a straight, Three to Seven
+
+
+PokerStars Hand #243891234570: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:29:12 ET
+Table 'Hydra II' 6-max Seat #3 is the button
+Seat 1: Hero ($214.00 in chips)
+Seat 2: Villain1 ($93.00 in chips)
+Seat 3: Villain2 ($211.00 in chips)
+Villain1: posts small blind $0.50
+Villain2: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [Ac Qh]
+Hero: raises $2.50 to $3.50
+Villain1: calls $3
+Villain2: folds
+*** FLOP *** [Qd 8c 3s]
+Villain1: checks
+Hero: bets $4.50
+Villain1: calls $4.50
+*** TURN *** [Qd 8c 3s] [Qs]
+Villain1: checks
+Hero: bets $10
+Villain1: calls $10
+*** RIVER *** [Qd 8c 3s Qs] [2h]
+Villain1: checks
+Hero: bets $25
+Villain1: calls $25
+*** SHOW DOWN ***
+Hero: shows [Ac Qh] (three of a kind, Queens)
+Villain1: mucks hand
+Hero collected $85 from pot
+*** SUMMARY ***
+Total pot $87 | Rake $2
+Board [Qd 8c 3s Qs 2h]
+Seat 1: Hero showed [Ac Qh] and won ($85) with three of a kind, Queens
+Seat 2: Villain1 (small blind) mucked
+Seat 3: Villain2 (button) (big blind) folded before Flop
+
+
+PokerStars Hand #243891234571: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:31:05 ET
+Table 'Hydra II' 6-max Seat #1 is the button
+Seat 1: Hero ($256.00 in chips)
+Seat 2: Villain1 ($50.00 in chips)
+Seat 3: Villain2 ($210.00 in chips)
+Hero: posts small blind $0.50
+Villain1: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [7h 6h]
+Villain2: raises $3 to $4
+Hero: calls $3.50
+Villain1: folds
+*** FLOP *** [5h 8h 2d]
+Hero: checks
+Villain2: bets $6
+Hero: calls $6
+*** TURN *** [5h 8h 2d] [4h]
+Hero: checks
+Villain2: bets $15
+Hero: raises $35 to $50
+Villain2: calls $35
+*** RIVER *** [5h 8h 2d 4h] [Kd]
+Hero: bets $75
+Villain2: folds
+Uncalled bet ($75) returned to Hero
+Hero collected $118 from pot
+Hero: doesn't show hand
+*** SUMMARY ***
+Total pot $121 | Rake $3
+Board [5h 8h 2d 4h Kd]
+Seat 1: Hero (button) (small blind) collected ($118)
+Seat 2: Villain1 (big blind) folded before Flop
+Seat 3: Villain2 folded on the River
+
+
+PokerStars Hand #243891234572: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:32:41 ET
+Table 'Hydra II' 6-max Seat #2 is the button
+Seat 1: Hero ($314.00 in chips)
+Seat 2: Villain1 ($49.00 in chips)
+Seat 3: Villain2 ($150.00 in chips)
+Villain1: posts small blind $0.50
+Villain2: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [Jc Js]
+Hero: raises $3 to $4
+Villain1: folds
+Villain2: raises $12 to $16
+Hero: calls $12
+*** FLOP *** [2d 9c Jh]
+Villain2: bets $18
+Hero: calls $18
+*** TURN *** [2d 9c Jh] [3c]
+Villain2: checks
+Hero: bets $35
+Villain2: calls $35
+*** RIVER *** [2d 9c Jh 3c] [8s]
+Villain2: checks
+Hero: bets $60
+Villain2: calls $60
+*** SHOW DOWN ***
+Hero: shows [Jc Js] (three of a kind, Jacks)
+Villain2: mucks hand
+Hero collected $256 from pot
+*** SUMMARY ***
+Total pot $258.50 | Rake $2.50
+Board [2d 9c Jh 3c 8s]
+Seat 1: Hero showed [Jc Js] and won ($256) with three of a kind, Jacks
+Seat 2: Villain1 (button) (small blind) folded before Flop
+Seat 3: Villain2 (big blind) mucked
+
+
+PokerStars Hand #243891234573: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:34:23 ET
+Table 'Hydra II' 6-max Seat #3 is the button
+Seat 1: Hero ($442.00 in chips)
+Seat 2: Villain1 ($48.50 in chips)
+Seat 3: Villain2 ($100.00 in chips)
+Villain1: posts small blind $0.50
+Villain2: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [Ah Th]
+Hero: raises $2.50 to $3.50
+Villain1: calls $3
+Villain2: folds
+*** FLOP *** [Kh Qh 2h]
+Villain1: checks
+Hero: bets $5
+Villain1: raises $10 to $15
+Hero: calls $10
+*** TURN *** [Kh Qh 2h] [9d]
+Villain1: bets $29.50 and is all-in
+Hero: calls $29.50
+*** RIVER *** [Kh Qh 2h 9d] [7s]
+*** SHOW DOWN ***
+Villain1: shows [Kd Qs] (two pair, Kings and Queens)
+Hero: shows [Ah Th] (a flush, Ace high)
+Hero collected $96 from pot
+*** SUMMARY ***
+Total pot $98 | Rake $2
+Board [Kh Qh 2h 9d 7s]
+Seat 1: Hero showed [Ah Th] and won ($96) with a flush, Ace high
+Seat 2: Villain1 (small blind) showed [Kd Qs] and lost with two pair, Kings and Queens
+Seat 3: Villain2 (button) (big blind) folded before Flop
+
+
+PokerStars Hand #243891234574: Hold'em No Limit ($0.50/$1.00 USD) - 2023/07/15 14:36:01 ET
+Table 'Hydra II' 6-max Seat #1 is the button
+Seat 1: Hero ($489.50 in chips)
+Seat 3: Villain2 ($99.00 in chips)
+Seat 4: Villain3 ($100.00 in chips)
+Hero: posts small blind $0.50
+Villain2: posts big blind $1
+Villain3: posts big blind $1
+*** HOLE CARDS ***
+Dealt to Hero [As Ad]
+Villain3: checks
+Hero: raises $5 to $6
+Villain2: folds
+Villain3: calls $5
+*** FLOP *** [5s 3d 7h]
+Hero: bets $8
+Villain3: calls $8
+*** TURN *** [5s 3d 7h] [2c]
+Hero: bets $20
+Villain3: raises $40 to $60
+Hero: raises $26 to $86 and is all-in
+Villain3: calls $26 and is all-in
+*** RIVER *** [5s 3d 7h 2c] [9h]
+*** SHOW DOWN ***
+Hero: shows [As Ad] (a pair of Aces)
+Villain3: shows [7c 7d] (three of a kind, Sevens)
+Villain3 collected $199 from pot
+*** SUMMARY ***
+Total pot $201 | Rake $2
+Board [5s 3d 7h 2c 9h]
+Seat 1: Hero (button) (small blind) showed [As Ad] and lost with a pair of Aces
+Seat 3: Villain2 (big blind) folded before Flop
+Seat 4: Villain3 showed [7c 7d] and won ($199) with three of a kind, Sevens

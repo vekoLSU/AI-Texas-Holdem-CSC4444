@@ -5,7 +5,7 @@ Translates between the engine's protocol and the bot's expected format
 import asyncio
 import json
 import websockets
-from bot import PokerBot
+from poker_bot.core.bot import PlayerClient
 
 class CompetitionAdapter:
     """Adapts bot to work with the competition engine"""
@@ -126,26 +126,28 @@ class CompetitionAdapter:
     def translate_bot_action_to_engine(self, bot_action: dict) -> dict:
         """
         Translate bot action to competition engine format
-        
+
         Bot sends:
         {"type": "action", "action": "call"}
         {"type": "action", "action": "raise", "amount": 50}
-        
-        Engine expects:
-        {"type": "act", "playerId": "player_id", "action": "CALL"}
-        {"type": "act", "playerId": "player_id", "action": "RAISE", "amount": 50}
+
+        Engine expects (EXACT FORMAT - lowercase actions!):
+        {"type": "action", "action": "call"}
+        {"type": "action", "action": "check"}
+        {"type": "action", "action": "fold"}
+        {"type": "action", "action": "raise", "amount": 50}
         """
-        action = bot_action.get("action", "").upper()
-        
+        action = bot_action.get("action", "").lower()  # MUST BE LOWERCASE!
+
         engine_msg = {
-            "type": "act",
-            "playerId": self.player,
+            "type": "action",
             "action": action
         }
-        
-        if "amount" in bot_action:
+
+        # Add amount for raises
+        if action == "raise" and "amount" in bot_action:
             engine_msg["amount"] = bot_action["amount"]
-        
+
         return engine_msg
     
     async def run(self):
@@ -225,7 +227,11 @@ async def main():
 ║     🃏  COMPETITION POKER BOT ADAPTER  🃏              ║
 ║          Texas Hold'em Infrastructure Engine             ║
 ╚══════════════════════════════════════════════════════════╝
+    """)
+
     # Competition engine adapter
+    adapter = CompetitionAdapter(API_KEY, TABLE, PLAYER, SERVER_URL)
+
     try:
         await adapter.run()
     except KeyboardInterrupt:
