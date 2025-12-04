@@ -79,6 +79,22 @@ class PlayerClient:
         current_pot = state.get("pot", 0)
         current_hand = state.get("hand", 0)
         
+        # Initialize tracking attributes if not present
+        if not hasattr(self, 'last_phase'):
+            self.last_phase = "WAITING"
+        if not hasattr(self, 'pot_at_phase_start'):
+            self.pot_at_phase_start = current_pot
+        if not hasattr(self, 'my_bet_this_phase'):
+            self.my_bet_this_phase = 0
+        
+        # Detect phase change - reset betting tracking BEFORE we act
+        if current_phase != self.last_phase:
+            print(f"\n[{self.player_id}] 🔄 Phase changed: {self.last_phase} → {current_phase}")
+            print(f"[{self.player_id}] Setting pot_at_phase_start to: {current_pot}")
+            self.pot_at_phase_start = current_pot
+            self.my_bet_this_phase = 0
+            self.last_phase = current_phase
+        
         # Show player status at the start of each hand (PREFLOP phase)
         if current_phase == "PREFLOP" and (not hasattr(self, 'last_hand_shown') or self.last_hand_shown != current_hand):
             self.last_hand_shown = current_hand
@@ -97,13 +113,6 @@ class PlayerClient:
             
             print(f"\n  💰 Starting Pot: ${current_pot}")
             print(f"{'='*60}\n")
-        
-        # Detect phase change - reset betting tracking
-        if current_phase != self.last_phase:
-            self.pot_at_phase_start = current_pot
-            self.my_bet_this_phase = 0
-            self.actions_this_phase = []
-            self.last_phase = current_phase
         
         self.phase = current_phase
         players = table.get("players", [])
@@ -348,7 +357,7 @@ class PlayerClient:
 
         # Convert card ranks to numeric values
         rank_to_numeric = {
-            '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10,
+            '2': 2, '3': 3, '4': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10,
             'J': 11, 'Q': 12, 'K': 13, 'A': 14
         }
         input_data = [
@@ -370,7 +379,7 @@ class PlayerClient:
 
         # Convert card ranks to numeric values
         rank_to_numeric = {
-            '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10,
+            '2': 2, '3': 3, '4': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10,
             'J': 11, 'Q': 12, 'K': 13, 'A': 14
         }
         critic_input_data = [
