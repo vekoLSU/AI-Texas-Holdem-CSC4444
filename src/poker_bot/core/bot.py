@@ -8,15 +8,17 @@ import websockets
 from poker_bot.evaluation import HandEvaluator, OpponentTracker
 from poker_bot.core.meta_controller import MetaController
 from poker_bot.training import TrainingRecorder
+from urllib.parse import quote
 
 class PokerBot:
     # Poker bot main class with ensemble strategy system
 
-    def __init__(self, api_key: str, table: str, player: str, server_url: str = "ws://localhost:8080"):
+    def __init__(self, api_key: str, table: str, player: str, server_url: str = "ws://localhost:8080", start_key: str = ""):
         self.api_key = api_key
         self.table = table
         self.player = player
         self.server_url = server_url
+        self.start_key = start_key
 
         # Game state
         self.game_state: Optional[Dict] = None
@@ -47,20 +49,30 @@ class PokerBot:
         self.last_known_stack: int = 0
         
     def get_ws_url(self) -> str:
-        # Build WebSocket URL
-        return f"{self.server_url}/ws?apiKey={self.api_key}&table={self.table}&player={self.player}"
+        # Build WebSocket URL with proper encoding for spaces/special chars
+        from urllib.parse import quote
+        return f"{self.server_url}/ws?apiKey={self.api_key}&table={self.table}&player={quote(self.player)}"
     
     async def connect_and_play(self):
         # Main bot loop
         url = self.get_ws_url()
         print(f"🤖 Connecting to {url}")
-        print(f"🎯 Player: {self.player} | Table: {self.table}")
         
         try:
             async with websockets.connect(url) as ws:
-                # Join the table
+                # 1. Send JOIN to sit at the table
+                print("📤 Sending JOIN command...")
                 await self.send_message(ws, {"type": "join"})
-                print(f"✅ Joined table as {self.player}")
+                
+                # 2. Send START to begin the game (Critical Step!)
+                if self.start_key:
+                    print(f"🔑 Sending START command with key: {self.start_key}")
+                    await self.send_message(ws, {
+                        "type": "start", 
+                        "key": self.start_key
+                    })
+                
+                print(f"✅ Connected as {self.player}")
                 
                 # Main game loop
                 while True:
@@ -70,12 +82,12 @@ class PokerBot:
                     except websockets.exceptions.ConnectionClosed:
                         print("❌ Connection closed")
                         break
-                        
         except Exception as e:
             print(f"❌ Connection error: {e}")
             raise
         finally:
-            if self.training_recorder:
+            # Cleanup logs if recorder exists
+            if hasattr(self, 'training_recorder') and self.training_recorder:
                 self.training_recorder.flush()
     
     async def send_message(self, ws, message: dict):
@@ -168,17 +180,30 @@ class PokerBot:
         except Exception as e:
             print(f"[ERROR] Exception in handle_state_update: {e}")
             traceback.print_exc()
-    
+            
     def find_our_player(self, players: List[dict]) -> Optional[dict]:
-        # Find our player
+        from urllib.parse import unquote
+    
+        # 1. Try matching by name (The logic you provided)
         for player in players:
-            if player.get("id") == self.player:
-                # Defensive: ignore extra fields like 'cards' for opponents
-                # Only use our own 'cards' field for decision making
+            p_id = player.get("id")
+            if (p_id == self.player) or \
+                (unquote(p_id) == self.player) or \
+                (p_id == self.player.replace(" ", "%20")):
                 return {
                     **player,
                     "cards": player.get("cards", self.hand_cards)
                 }
+
+        # 2. FAILSAFE: Match by visible cards (Crucial for test_server!)
+        # The test server sends opponents' cards as null/None.
+        # Only YOUR player object will have a list of cards.
+        for player in players:
+            if player.get('cards') is not None:
+                # We found the only player with cards - that's us!
+                # Update our internal name so the first check works next time
+                self.player = player.get('id') 
+                return player
         return None
     
     async def make_decision(self, state: dict, our_player: dict, all_players: List[dict], hand_num: int) -> Optional[dict]:
@@ -487,6 +512,7 @@ async def main():
     TABLE = sys.argv[2] if len(sys.argv) > 2 else "table-1"
     PLAYER = sys.argv[3] if len(sys.argv) > 3 else "bot1"
     SERVER_URL = sys.argv[4] if len(sys.argv) > 4 else "ws://localhost:8080"
+    START_KEY = sys.argv[5] if len(sys.argv) > 5 else ""
     
     print(f"""
 ╔══════════════════════════════════════════════════════════╗
