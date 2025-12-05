@@ -1,4 +1,4 @@
-# Texas Hold'em Poker Bot
+# THE WINNINF Texas Hold'em Poker Bot for FALL 2025 CSC 4444 ARTIFICIAL INTELLEGENCE
 
 An AI poker bot for Texas Hold'em tournaments. It uses advanced decision-making, hand evaluation, and opponent modeling.
 
