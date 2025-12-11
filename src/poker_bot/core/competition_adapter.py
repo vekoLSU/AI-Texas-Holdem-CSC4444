@@ -153,14 +153,14 @@ class CompetitionAdapter:
     async def run(self):
         """Main adapter loop"""
         url = self.get_ws_url()
-        print(f"🤖 Connecting to competition engine at {url}")
-        print(f"🎯 Player: {self.player} | Table: {self.table}")
+        print(f"Connecting to competition engine at {url}")
+        print(f"Player: {self.player} | Table: {self.table}")
         
         try:
             async with websockets.connect(url) as ws:
                 # Join the table
                 await ws.send(json.dumps({"type": "join"}))
-                print(f"✅ Joined table as {self.player}")
+                print(f"Joined table as {self.player}")
                 
                 # Main game loop
                 while True:
@@ -181,9 +181,9 @@ class CompetitionAdapter:
                                 hand_num = bot_state.get("hand", 0)
                                 
                                 print(f"\n{'='*60}")
-                                print(f"🎴 Hand #{hand_num} | Phase: {phase} | Pot: ${pot}")
-                                print(f"🃏 Our cards: {bot_state.get('cards', [])}")
-                                print(f"🎯 Community: {bot_state.get('communityCards', [])}")
+                                print(f"Hand #{hand_num} | Phase: {phase} | Pot: ${pot}")
+                                print(f"Our cards: {bot_state.get('cards', [])}")
+                                print(f"Community: {bot_state.get('communityCards', [])}")
                                 
                                 # Use bot's decision making
                                 our_player = {"id": self.player, "chips": 1000, "bet": 0}
@@ -197,18 +197,18 @@ class CompetitionAdapter:
                                     # Translate action to engine format
                                     engine_action = self.translate_bot_action_to_engine(action)
                                     await ws.send(json.dumps(engine_action))
-                                    print(f"🎲 Action: {action}")
+                                    print(f"Action: {action}")
                                     print(f"{'='*60}\n")
                         
                         elif engine_state.get("type") == "error":
-                            print(f"⚠️  Engine error: {engine_state.get('error')}")
+                            print(f"Engine error: {engine_state.get('error')}")
                         
                     except websockets.exceptions.ConnectionClosed:
-                        print("❌ Connection closed")
+                        print("Connection closed")
                         break
                         
         except Exception as e:
-            print(f"❌ Connection error: {e}")
+            print(f"Connection error: {e}")
             raise
 
 
@@ -223,10 +223,10 @@ async def main():
     SERVER_URL = sys.argv[4] if len(sys.argv) > 4 else "ws://localhost:8080"
     
     print(f"""
-╔══════════════════════════════════════════════════════════╗
-║     🃏  COMPETITION POKER BOT ADAPTER  🃏              ║
-║          Texas Hold'em Infrastructure Engine             ║
-╚══════════════════════════════════════════════════════════╝
+=============================================================
+  COMPETITION POKER BOT ADAPTER
+  Texas Hold'em Infrastructure Engine
+=============================================================
     """)
 
     # Competition engine adapter
@@ -235,9 +235,9 @@ async def main():
     try:
         await adapter.run()
     except KeyboardInterrupt:
-        print("\n👋 Bot shutting down...")
+        print("\nBot shutting down...")
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        print(f"Fatal error: {e}")
         raise
 
 

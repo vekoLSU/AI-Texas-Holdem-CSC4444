@@ -4,11 +4,16 @@ import os
 import sys
 import threading
 import time
+from pathlib import Path
+
+# Ensure `src` directory is on sys.path so imports like `from poker_bot...` work
+# when running this file directly (e.g. `python src/poker_bot/core/bot.py`).
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from typing import Dict, List, Optional
 from websocket import WebSocketApp, WebSocketConnectionClosedException
 
-#WS_URL_TEMPLATE = "ws://localhost:8080/ws?apiKey={apiKey}&table={table}&player={player}"
-WS_URL_TEMPLATE = "wss://texasholdem-871757115753.northamerica-northeast1.run.app/ws?apiKey={apiKey}&table={table}&player={player}"
+WS_URL_TEMPLATE = "ws://localhost:8080/ws?apiKey={apiKey}&table={table}&player={player}"
+#WS_URL_TEMPLATE = "wss://texasholdem-871757115753.northamerica-northeast1.run.app/ws?apiKey={apiKey}&table={table}&player={player}"
 
 class PlayerClient:
     def __init__(self, player_id: str, api_key: str, table_id: str):
@@ -59,18 +64,18 @@ class PlayerClient:
             players = table.get("players", [])
             
             print(f"\n{'='*60}")
-            print(f"  🎮 TABLE JOINED - {table.get('id', 'unknown')}")
+            print(f"  TABLE JOINED - {table.get('id', 'unknown')}")
             print(f"{'='*60}")
-            print(f"\n  👥 CONNECTED PLAYERS:")
+            print(f"\n  CONNECTED PLAYERS:")
             
             for i, player in enumerate(players):
                 player_id = player.get("id", "?")
                 chips = player.get("chips", 0)
-                is_me = " ⭐ (YOU)" if player_id == self.player_id else ""
+                is_me = " (YOU)" if player_id == self.player_id else ""
                 print(f"    [{i}] {player_id}: ${chips}{is_me}")
             
-            print(f"\n  💰 Current Pot: ${state.get('pot', 0)}")
-            print(f"  🎲 Phase: {state.get('phase', 'WAITING')}")
+            print(f"\n  Current Pot: ${state.get('pot', 0)}")
+            print(f"  Phase: {state.get('phase', 'WAITING')}")
             print(f"{'='*60}\n")
         
         # Correctly update toActIdx from the game state
@@ -89,7 +94,7 @@ class PlayerClient:
         
         # Detect phase change - reset betting tracking BEFORE we act
         if current_phase != self.last_phase:
-            print(f"\n[{self.player_id}] 🔄 Phase changed: {self.last_phase} → {current_phase}")
+            print(f"\n[{self.player_id}] Phase changed: {self.last_phase} -> {current_phase}")
             print(f"[{self.player_id}] Setting pot_at_phase_start to: {current_pot}")
             self.pot_at_phase_start = current_pot
             self.my_bet_this_phase = 0
@@ -101,17 +106,17 @@ class PlayerClient:
             players = table.get("players", [])
             
             print(f"\n{'='*60}")
-            print(f"  🎰 HAND #{current_hand} - STARTING")
+            print(f"  HAND #{current_hand} - STARTING")
             print(f"{'='*60}")
-            print(f"\n  👥 CONNECTED PLAYERS:")
+            print(f"\n  CONNECTED PLAYERS:")
             
             for i, player in enumerate(players):
                 player_id = player.get("id", "?")
                 chips = player.get("chips", 0)
-                is_me = " ⭐ (YOU)" if player_id == self.player_id else ""
+                is_me = " (YOU)" if player_id == self.player_id else ""
                 print(f"    [{i}] {player_id}: ${chips}{is_me}")
             
-            print(f"\n  💰 Starting Pot: ${current_pot}")
+            print(f"\n  Starting Pot: ${current_pot}")
             print(f"{'='*60}\n")
         
         self.phase = current_phase
@@ -125,38 +130,38 @@ class PlayerClient:
         # Only act when it's our turn
         if self.my_seat is not None and self.my_seat == self.to_act_idx and self.phase not in ("WAITING", "SHOWDOWN"):
             print(f"\n{'='*60}")
-            print(f"[{self.player_id}] 🎯 OUR TURN TO ACT!")
+            print(f"[{self.player_id}] OUR TURN TO ACT!")
             print(f"[{self.player_id}] Phase: {self.phase}, Pot: {state.get('pot', 0)}, Hand #{state.get('hand', 0)}")
             print(f"{'='*60}\n")
             
             # Display game situation clearly
-            print(f"\n{'🃏'*30}")
+            print(f"\n{'='*30}")
             print(f"  GAME SITUATION - {self.phase}")
-            print(f"{'🃏'*30}")
+            print(f"{'='*30}")
             
             # Show MY HAND
             my_cards = table.get("players", [])[self.my_seat].get("cards", [])
             hand_display = " ".join([f"{c.get('rank', '?')}{c.get('suit', '?')}" for c in my_cards])
-            print(f"\n  🎴 YOUR HAND: {hand_display}")
+            print(f"\n  YOUR HAND: {hand_display}")
             
             # Show BOARD
             board_cards = state.get("board", [])
             if board_cards:
                 board_display = " ".join([f"{c.get('rank', '?')}{c.get('suit', '?')}" for c in board_cards])
-                print(f"  🎲 BOARD: {board_display}")
+                print(f"  BOARD: {board_display}")
             else:
-                print(f"  🎲 BOARD: (no community cards yet)")
+                print(f"  BOARD: (no community cards yet)")
             
             # Show POT
-            print(f"\n  💰 POT: ${state.get('pot', 0)}")
+            print(f"\n  POT: ${state.get('pot', 0)}")
             
             # Show ALL PLAYERS with chips
-            print(f"\n  👥 PLAYERS:")
+            print(f"\n  PLAYERS:")
             for i, player in enumerate(players):
                 player_id = player.get("id", "?")
                 chips = player.get("chips", 0)
-                is_me = " ⭐ (YOU)" if i == self.my_seat else ""
-                is_acting = " 🎯 (acting)" if i == self.to_act_idx else ""
+                is_me = " (YOU)" if i == self.my_seat else ""
+                is_acting = " (acting)" if i == self.to_act_idx else ""
                 chip_status = "ALL-IN" if chips == 0 else f"${chips}"
                 print(f"    [{i}] {player_id}: {chip_status}{is_me}{is_acting}")
             
@@ -181,7 +186,7 @@ class PlayerClient:
             
             # CRITICAL: If we have 0 chips, we're already all-in!
             if our_chips == 0:
-                print(f"[{self.player_id}] ⚠️ ALREADY ALL-IN (chips=0) - can only check/wait")
+                print(f"[{self.player_id}] WARNING: ALREADY ALL-IN (chips=0) - can only check/wait")
                 # When all-in, we just check (send CALL with 0)
                 self.send_action("CALL", 0)
                 return
@@ -203,7 +208,7 @@ class PlayerClient:
             
             # Detect phase change - reset betting tracking
             if self.phase != self.last_phase:
-                print(f"[{self.player_id}] 🔄 Phase changed: {self.last_phase} → {self.phase}")
+                print(f"[{self.player_id}] Phase changed: {self.last_phase} -> {self.phase}")
                 self.pot_at_phase_start = current_pot
                 self.last_phase = self.phase
             
@@ -235,7 +240,7 @@ class PlayerClient:
             # We don't know exactly what we've bet, so assume we need to match current_bet
             to_call = min(current_bet, our_chips)  # Can't call more than we have
             
-            print(f"[{self.player_id}] 💰 BETTING CALCULATION:")
+            print(f"[{self.player_id}] BETTING CALCULATION:")
             print(f"   Our chips: {our_chips}")
             print(f"   Pot at phase start: {self.pot_at_phase_start}")
             print(f"   Current pot: {current_pot}")
@@ -269,35 +274,35 @@ class PlayerClient:
             action = decision.get("action", "call").lower()  # Keep lowercase for consistency
             amount = decision.get("amount", 0)
             
-            print(f"[{self.player_id}] 🎲 Raw decision from agent: action={action}, amount={amount}")
-            print(f"[{self.player_id}] 📊 Decision context: to_call={to_call}, hand_strength={hand_strength.get('strength', 0.0)}")
+            print(f"[{self.player_id}] Raw decision from agent: action={action}, amount={amount}")
+            print(f"[{self.player_id}] Decision context: to_call={to_call}, hand_strength={hand_strength.get('strength', 0.0)}")
             
             # Handle different actions
             if action == "fold":
                 # FOLD - no amount needed
-                print(f"[{self.player_id}] 🚫 FOLDING (hand too weak or bet too high)")
+                print(f"[{self.player_id}] FOLDING (hand too weak or bet too high)")
                 final_action = "FOLD"
                 final_amount = 0
             elif action == "call":
                 # CALL - send the exact to_call amount
                 if to_call == 0:
-                    print(f"[{self.player_id}] ✓ CHECKING (no bet to call)")
+                    print(f"[{self.player_id}] CHECKING (no bet to call)")
                 else:
-                    print(f"[{self.player_id}] 📞 CALLING {to_call}")
+                    print(f"[{self.player_id}] CALLING {to_call}")
                 final_action = "CALL"
                 final_amount = to_call
             elif action == "raise":
                 # RAISE - use the amount from decision
-                print(f"[{self.player_id}] 📈 RAISING to {amount}")
+                print(f"[{self.player_id}] RAISING to {amount}")
                 final_action = "RAISE"
                 final_amount = int(amount)
             else:
                 # Unknown action - default to fold for safety
-                print(f"[{self.player_id}] ⚠️ Unknown action '{action}', defaulting to FOLD")
+                print(f"[{self.player_id}] WARNING: Unknown action '{action}', defaulting to FOLD")
                 final_action = "FOLD"
                 final_amount = 0
             
-            print(f"[{self.player_id}] 📤 Final decision: {final_action}, amount: {final_amount}")
+            print(f"[{self.player_id}] Final decision: {final_action}, amount: {final_amount}")
             print(f"[{self.player_id}] Debug - Full decision: {decision}")
             print(f"[{self.player_id}] Debug - Hand: {hand_cards}, Board: {community_cards}")
             print(f"[{self.player_id}] Debug - to_call: {to_call}, current_bet: {current_bet}, our_bet: {self.my_bet_this_phase}")
@@ -325,14 +330,14 @@ class PlayerClient:
             "action": action,
             "amount": amount,
         }
-        print(f"[{self.player_id}] 📤 Sending to server: {msg}")
+        print(f"[{self.player_id}] Sending to server: {msg}")
         try:
             self.ws.send(json.dumps(msg))
-            print(f"[{self.player_id}] ✅ Action sent successfully")
+            print(f"[{self.player_id}] Action sent successfully")
         except WebSocketConnectionClosedException as e:
-            print(f"[{self.player_id}] ❌ Send failed:", e)
+            print(f"[{self.player_id}] Send failed:", e)
         except Exception as e:
-            print(f"[{self.player_id}] ❌ Unexpected error:", e)
+            print(f"[{self.player_id}] Unexpected error:", e)
 
     def run_ws(self):
         url = WS_URL_TEMPLATE.format(apiKey=self.api_key, table=self.table_id, player=self.player_id)
