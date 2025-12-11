@@ -1,4 +1,4 @@
-# Texas Hold'em Poker Bot
+#The WINNING Texas Hold'em Poker Bot for CSC 4444 Artificial Intellegence
 
 An AI poker bot for Texas Hold'em tournaments. It uses advanced decision-making, hand evaluation, and opponent modeling.
 
